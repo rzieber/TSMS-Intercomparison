@@ -1,0 +1,362 @@
+
+Found using file_checker.py
+
+File: TSMS00_20220909.dat
+Indent found on line  533
+
+File: TSMS00_20220909.dat
+Indent found on line  794
+
+File:  TSMS00_20220909.dat
+Indent found on line  906
+
+File: TSMS00_20221006.dat
+Indent found on line  389
+
+File:  TSMS00_20221006.dat
+Indent found on line  822
+
+File:  TSMS00_20221007.dat
+Indent found on line  842
+
+File:  TSMS00_20221011.dat
+Indent found on line  828
+
+File:  TSMS00_20221020.dat
+Indent found on line  934
+
+File:  TSMS00_20230222.dat
+Indent found on line  1465
+
+File:  TSMS00_20230223.dat
+Indent found on line  456
+
+File:  TSMS00_20230303.dat
+Indent found on line  24
+
+File:  TSMS00_20230612.dat
+Indent found on line  741
+
+File:  TSMS00_20231019.dat
+Indent found on line  1254
+
+File:  TSMS00_20231019.dat
+Indent found on line  1323
+
+File:  TSMS00_20231019.dat
+Indent found on line  1384
+
+File: TSMS00_20231020.dat
+Indent found on line  430
+
+File:  TSMS00_20231020.dat
+Indent found on line  443
+
+File:  TSMS00_20231020.dat
+Indent found on line  578
+
+File:  TSMS00_20231225.dat
+Indent found on line  757
+
+File:  TSMS00_20231227.dat
+Indent found on line  712
+
+File:  TSMS01_20220818.dat
+Indent found on line  394
+
+File:  TSMS01_20220819.dat
+Indent found on line  202
+
+File:  TSMS01_20220823.dat
+Indent found on line  827
+
+File:  TSMS01_20220827.dat
+Indent found on line  1405
+
+File:  TSMS01_20220831.dat
+Indent found on line  701
+
+File:  TSMS01_20220901.dat
+Indent found on line  473
+
+File:  TSMS01_20220907.dat
+Indent found on line  745
+
+File:  TSMS01_20221006.dat
+Indent found on line  389
+
+File:  TSMS01_20221007.dat
+Indent found on line  841
+
+File:  TSMS01_20221011.dat
+Indent found on line  827
+
+File:  TSMS01_20221012.dat
+Indent found on line  398
+
+File:  TSMS01_20230331.dat
+Indent found on line  734
+
+File:  TSMS01_20230612.dat
+Indent found on line  741
+
+File:  TSMS01_20231019.dat
+Indent found on line  1254
+
+File:  TSMS01_20231019.dat
+Indent found on line  1322
+
+File:  TSMS01_20231020.dat
+Indent found on line  443
+
+File:  TSMS01_20231020.dat
+Indent found on line  578
+
+File:  TSMS01_20231130.dat
+Indent found on line  98
+
+File:  TSMS01_20231204.dat
+Indent found on line  1120
+
+File:  TSMS01_20231225.dat
+Indent found on line  755
+
+File:  TSMS01_20231227.dat
+Indent found on line  712
+
+File:  TSMS02_20220819.dat
+Indent found on line  49
+
+File:  TSMS02_20220823.dat
+Indent found on line  827
+
+File:  TSMS02_20220827.dat
+Indent found on line  1405
+
+File:  TSMS02_20220905.dat
+Indent found on line  550
+
+File:  TSMS02_20220907.dat
+Indent found on line  541
+
+File:  TSMS02_20220907.dat
+Indent found on line  590
+
+File:  TSMS02_20220908.dat
+Indent found on line  57
+
+File:  TSMS02_20220908.dat
+Indent found on line  76
+
+File:  TSMS02_20221006.dat
+Indent found on line  389
+
+File:  TSMS02_20221007.dat
+Indent found on line  841
+
+File: TSMS02_20221012.dat
+Indent found on line  398
+
+File:  TSMS02_20230223.dat
+Indent found on line  443
+
+File:  TSMS02_20230302.dat
+Indent found on line  724
+
+File:  TSMS02_20230302.dat
+Indent found on line  726
+
+File:  TSMS02_20230315.dat
+Indent found on line  662
+
+File:  TSMS02_20230331.dat
+Indent found on line  10
+
+File:  TSMS02_20230331.dat
+Indent found on line  14
+
+File:  TSMS02_20230612.dat
+Indent found on line  741
+
+File:  TSMS02_20231019.dat
+Indent found on line  1323
+
+File:  TSMS02_20231019.dat
+Indent found on line  1383
+
+File:  TSMS02_20231020.dat
+Indent found on line  430
+
+File:  TSMS02_20231020.dat
+Indent found on line  442
+
+File:  TSMS02_20231020.dat
+Indent found on line  577
+
+File:  TSMS02_20231130.dat
+Indent found on line  98
+
+File:  TSMS02_20231204.dat
+Indent found on line  1120
+
+File:  TSMS02_20231225.dat
+Indent found on line  755
+
+File:  TSMS02_20231227.dat
+Indent found on line  712
+
+File:  TSMS02_20240104.dat
+Indent found on line  752
+
+File:  TSMS02_20240111.dat
+Indent found on line  539
+
+File:  TSMS03_20220822.dat
+Indent found on line  276
+
+File:  TSMS03_20220824.dat
+Indent found on line  496
+
+File:  TSMS03_20220902.dat
+Indent found on line  542
+
+File:  TSMS03_20220920.dat
+Indent found on line  419
+
+File:  TSMS03_20221012.dat
+Indent found on line  768
+
+File:  TSMS03_2022_11_28.dat
+Indent found on line  824
+
+File:  TSMS03_2023_03_23.dat
+Indent found on line  707
+
+File:  TSMS03_2023_04_29.dat
+Indent found on line  698
+
+File:  TSMS03_2023_05_06.dat 
+Indent found on line  1177
+
+File:  TSMS03_2023_05_23.dat
+Indent found on line  752
+
+File:  TSMS03_2023_09_19.dat
+Indent found on line  1365
+
+File:  TSMS03_2023_12_11.dat
+Indent found on line  1381
+
+File:  TSMS03_2023_12_20.dat
+Indent found on line  1339
+
+File:  TSMS03_2024_01_02.dat
+Indent found on line  352
+
+File:  TSMS03_2024_01_02.dat
+Indent found on line  569
+
+File:  TSMS03_2024_01_12.dat
+Indent found on line  566
+
+File:  TSMS04_20220822.dat
+Indent found on line  86
+
+File:  TSMS04_20220823.dat
+Indent found on line  690
+
+File:  TSMS04_20220823.dat
+Indent found on line  713
+
+File:  TSMS04_20220824.dat
+Indent found on line  496
+
+File:  TSMS04_20221012.dat
+Indent found on line  768
+
+File:  TSMS04_20221020.dat
+Indent found on line  394
+
+File:  TSMS04_20221020.dat
+Indent found on line  467
+
+File:  TSMS04_2023_02_01.dat
+Indent found on line  736
+
+File:  TSMS04_2023_04_24.dat
+Indent found on line  816
+
+File:  TSMS04_2023_04_29.dat 
+Indent found on line  698
+
+File:  TSMS04_2023_05_06.dat
+Indent found on line  1177
+
+File:  TSMS04_2023_05_23.dat
+Indent found on line  752
+
+File:  TSMS04_2023_06_13.dat
+Indent found on line  890
+
+File:  TSMS04_2023_09_19.dat
+Indent found on line  1364
+
+File:  TSMS04_2023_12_11.dat
+Indent found on line  1381
+
+File:  TSMS04_2023_12_20.dat 
+Indent found on line  1339
+
+File:  TSMS04_2024_01_02.dat
+Indent found on line  352
+
+File:  TSMS05_20220822.dat
+Indent found on line  83
+
+File:  TSMS05_20220824.dat 
+Indent found on line  496
+
+File:  TSMS05_20220902.dat
+Indent found on line  542
+
+File:  TSMS05_20220920.dat
+Indent found on line  419
+
+File:  TSMS05_20221012.dat
+Indent found on line  665
+
+File:  TSMS05_20221012.dat
+Indent found on line  767
+
+File:  TSMS05_20221020.dat
+Indent found on line  394
+
+File:  TSMS05_20221020.dat
+Indent found on line  467
+
+File:  TSMS05_2023_03_23.dat
+Indent found on line  707
+
+File:  TSMS05_2023_04_24.dat
+Indent found on line  816
+
+File:  TSMS05_2023_05_06.dat
+Indent found on line  1177
+
+File:  TSMS05_2023_05_23.dat
+Indent found on line  752
+
+File:  TSMS05_2023_11_06.dat
+Indent found on line  962
+
+File:  TSMS05_2023_11_14.dat
+Indent found on line  1411
+
+File:  TSMS05_2023_12_11.dat
+Indent found on line  1381
+
+File:  TSMS05_2023_12_20.dat
+Indent found on line  1339
+
+File:  TSMS05_2024_01_02.dat
+Indent found on line  352
