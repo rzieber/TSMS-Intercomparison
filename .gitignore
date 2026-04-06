@@ -1,4 +1,7 @@
 __pycache__/
 .DS_Store
-data/
+data/cleaned/
+data/error-analysis/
+data/raw/
+data/reformatted/*
 plots/

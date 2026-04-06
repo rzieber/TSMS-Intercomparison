@@ -6,7 +6,7 @@ from scipy.stats import pearsonr
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 
 
-output = Path("data/stats_test")
+output = Path("data/error-analysis")
 data = Path("data/cleaned")
 
 TIMESCALE = None    # 'H' --> hourly, 'D' --> daily, None --> point-for-point
