@@ -68,6 +68,12 @@ for station in station_directories:
     
 # -------------------------------------------------------------------------------------------------------------------------------
 
+def coerce_non_timestamp_columns_to_numeric(df, timestamp_col='date'):
+    non_ts_cols = [c for c in df.columns if c != timestamp_col]
+    df[non_ts_cols] = df[non_ts_cols].apply(pd.to_numeric, errors='coerce')
+    return df
+
+
 for i in range(len(station_directories)):
     print("\n----------------------")
     paws_df = tsms_df = None
@@ -89,6 +95,8 @@ for i in range(len(station_directories)):
             
             paws_df = paws_df[['date', 'bmp2_temp', 'htu_temp', 'sth_temp', 'mcp9808', 'bme2_hum', 'htu_hum', 'sth_hum', 
                                'bmp2_pres', 'bmp2_slp', 'wind_dir', 'wind_speed', 'tipping']]
+            
+            paws_df = coerce_non_timestamp_columns_to_numeric(paws_df)
             
             paws_df['year_month'] =             paws_df['date'].dt.to_period('M')
             paws_df['year_month_day'] =         paws_df['date'].dt.to_period('D')
@@ -591,28 +599,6 @@ for i in range(len(station_directories)):
     tsms_df_FILTERED.reset_index(drop=True, inplace=True)         
     paws_df_FILTERED.reset_index(drop=True, inplace=True)
 
-    # exclude_htu_noise = {   # Exclude HTU bit-switching from analysis for temperature & rh; 3D-PAWS only    
-    #     "TSMS00": [ 
-    #         "2022-08", "2022-12", "2023-01", "2023-06", "2023-07", "2023-08", "2023-09", 
-    #         "2023-10", "2023-11", "2023-12", "2024-01", "2024-02", "2024-03", "2024-04", 
-    #         "2024-06", "2024-07", "2024-08", "2024-09", "2024-10", "2024-11"
-    #     ],
-    #     "TSMS01": [
-    #         "2022-11", "2022-12", "2023-01", "2023-02", "2023-03", "2023-04", "2023-05",
-    #         "2023-06", "2023-07", "2023-08", "2023-09", "2023-10", "2023-11", "2024-01",
-    #         "2024-03", "2024-04", "2024-05", "2024-11"
-    #     ],
-    #     "TSMS02": [
-    #         "2022-09", "2022-11", "2022-12", "2023-01", "2023-04", "2023-05", "2023-06",
-    #         "2023-08", "2023-09", "2023-10", "2023-11"
-    #     ],
-    #     "TSMS03": [
-    #         "2023-02", "2023-03", "2023-04"
-    #     ],
-    #     "TSMS04": [
-    #         "2024-11"
-    #     ]
-    # }
 
     for variable in variable_mapper:                                # Filtering TSMS --------------------------------------------
         if variable in ["avg_wind_speed", "avg_wind_dir", "total_rainfall"]: continue
@@ -668,15 +654,8 @@ for i in range(len(station_directories)):
             existing_nulls = paws_df_FILTERED[var].isnull()
 
             original = paws_df_FILTERED[var].copy()
-
-            # # exclude certain timeframes for HTU due to noise contamination
-            # mask_exclude = pd.Series(False, index=paws_df_FILTERED.index)
-            # if var in ['htu_temp', 'htu_hum']:
-            #     bad_months = exclude_htu_noise.get(station_directories[i][8:14], [])
-            #     mask_exclude = paws_df_FILTERED['year_month'].isin(bad_months)
             
             stats_base = original.copy()
-            #stats_base.loc[mask_exclude] = np.nan
 
             rolling_mean = stats_base.rolling(window=window, center=True, min_periods=window//2).mean()
             rolling_std = stats_base.rolling(window=window, center=True, min_periods=window//2).std()
@@ -691,8 +670,8 @@ for i in range(len(station_directories)):
 
             mask_z = z_score.abs() > threshold
             mask_h = (original - rolling_med).abs() > hampel_threshold
-            new_null_z = mask_z & ~existing_nulls # & ~mask_exclude
-            new_null_h = mask_h & ~existing_nulls # & ~mask_exclude
+            new_null_z = mask_z & ~existing_nulls 
+            new_null_h = mask_h & ~existing_nulls 
 
             outliers_to_add = pd.DataFrame({
                 'date': paws_df_FILTERED.loc[new_null_z, 'date'],
@@ -720,23 +699,23 @@ for i in range(len(station_directories)):
     paws_df_FILTERED.drop(columns=['bme2_hum','year_month', 'year_month_day', 'year_month_day_hour'], inplace=True)
 
     if i in [0,1,2]: 
-        tsms_outliers.to_csv(data_destination+f"TSMS_Reference_Ankara_outliers_[HTU-FILTER-TEST].csv", index=False)
-        paws_outliers.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Ankara_outliers_[HTU-FILTER-TEST].csv", index=False)
+        tsms_outliers.to_csv(data_destination+f"TSMS_Reference_Ankara_outliers.csv", index=False)
+        paws_outliers.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Ankara_outliers.csv", index=False)
     elif i in [3,4,5]: 
-        tsms_outliers.to_csv(data_destination+f"TSMS_Reference_Konya_outliers_[HTU-FILTER-TEST].csv", index=False)
-        paws_outliers.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Konya_outliers_[HTU-FILTER-TEST].csv", index=False)
+        tsms_outliers.to_csv(data_destination+f"TSMS_Reference_Konya_outliers.csv", index=False)
+        paws_outliers.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Konya_outliers.csv", index=False)
     elif i in [6,7,8]: 
-        tsms_outliers.to_csv(data_destination+f"TSMS_Reference_Adana_outliers_[HTU-FILTER-TEST].csv", index=False)
-        paws_outliers.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Adana_outliers_[HTU-FILTER-TEST].csv", index=False)
+        tsms_outliers.to_csv(data_destination+f"TSMS_Reference_Adana_outliers.csv", index=False)
+        paws_outliers.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Adana_outliers.csv", index=False)
 
     if i in [0,1,2]: 
-        tsms_df_FILTERED.to_csv(data_destination+f"TSMS_Reference_Ankara_final_[HTU-FILTER-TEST].csv", index=False)
-        paws_df_FILTERED.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Ankara_final_[HTU-FILTER-TEST].csv", index=False)
+        tsms_df_FILTERED.to_csv(data_destination+f"TSMS_Reference_Ankara_final.csv", index=False)
+        paws_df_FILTERED.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Ankara_final.csv", index=False)
     elif i in [3,4,5]: 
-        tsms_df_FILTERED.to_csv(data_destination+f"TSMS_Reference_Konya_final_[HTU-FILTER-TEST].csv", index=False)
-        paws_df_FILTERED.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Konya_final_[HTU-FILTER-TEST].csv", index=False)
+        tsms_df_FILTERED.to_csv(data_destination+f"TSMS_Reference_Konya_final.csv", index=False)
+        paws_df_FILTERED.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Konya_final.csv", index=False)
     elif i in [6,7,8]: 
-        tsms_df_FILTERED.to_csv(data_destination+f"TSMS_Reference_Adana_final_[HTU-FILTER-TEST].csv", index=False)
-        paws_df_FILTERED.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Adana_final_[HTU-FILTER-TEST].csv", index=False)
+        tsms_df_FILTERED.to_csv(data_destination+f"TSMS_Reference_Adana_final.csv", index=False)
+        paws_df_FILTERED.to_csv(data_destination+f"3DPAWS_{station_directories[i][8:14]}_Adana_final.csv", index=False)
 
     print("\n----------------------")

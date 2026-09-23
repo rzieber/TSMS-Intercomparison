@@ -9,7 +9,7 @@ from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 output = Path("data/error-analysis")
 data = Path("data/cleaned")
 
-TIMESCALE = None    # 'H' --> hourly, 'D' --> daily, None --> point-for-point
+TIMESCALE = 'H'    # 'H' --> hourly, 'D' --> daily, None --> point-for-point
 
 variable_mapper = { # TSMS : 3DPAWS
     "temperature":          ["bmp2_temp", "htu_temp", "sth_temp", "mcp9808"],
