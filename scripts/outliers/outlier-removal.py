@@ -8,11 +8,16 @@ Note:   The subfolders for station_TSMS00 -> 08 are generated automatically.
 
 The data_destination pathway doesn't require this, just list the full pathname where you want things stored.
 
+Pre-pass: 3D-PAWS humidity from every station, for the Phase 5 site cross-check
 Phase 1: Nulls (-999.99)
 Phase 2: Timestamp resets (out of order timestamps)
 Phase 3: Thresholds (unrealistic values)
-Phase 4: Manual removal of identified special cases
-Phase 5: Statistical outlier removal (rolling z-score and Hampel filter)
+Phase 4: Manual removal of identified special cases, incl. documented sensor failures (sensor_failures)
+Phase 5: HTU21D bit-switching filter (step test + co-located 3D-PAWS sensors; no reference data)
+Phase 6: Statistical outlier removal (rolling z-score and Hampel filter, floored at sensor resolution)
+Phase 7: Daily completeness (a variable's day is removed if < 80% of its minutes are valid)
+
+Change history and rationale: docs/logic-changelog.md. Failure catalog: docs/sensor-failures.md.
 
 How to use this script:
     The outlier removal logic in the first portion of this script is to remain uncommented.
@@ -36,12 +41,42 @@ data_destination = r"data/cleaned/"
 
 outlier_reasons = [
     "null", "timestamp_reset", "threshold", "manual_removal", "htu_trend_switch", "z-score_contextual",
-    "hampel_contextual"
+    "hampel_contextual", "hum_step_site_check", "hum_step_unverified", "temp_step_station_check",
+    "temp_step_unverified", "sensor_failure", "daily_completeness"
 ]
 
-# Thresholds for excessive deviation -- catches HTU21D noise
-TEMP_THRESHOLD = 3.5  # °C
-HUM_THRESHOLD = 3.5   # %
+# Documented sensor failures, removed in full (see docs/sensor-failures.md for evidence).
+# (column, start, end, catalog id) -- end=None means through the end of the record.
+sensor_failures = {
+    # SF-01 (TSMS03 sth_hum) and SF-02 (TSMS04 htu_hum) were removed on 2026-09-28: they were not sensor failures but
+    # mislabeled CHORDS columns (SF-10), fixed in data/reformatted by scripts/reformatting/splice_chords_dec2024.py.
+}
+
+# Phase 7: a day's readings of a variable are kept only if at least this share of its 1,440 minutes are valid
+# (same criterion as the TSMS report, section 3.6). The analysis additionally requires 80% of minutes to be PAIRED.
+DAILY_COMPLETENESS = 0.8
+
+# Thresholds for the HTU21D "bit-switching" filter (Phase 5)
+TEMP_THRESHOLD = 3.5            # °C, jump between consecutive minutes that makes an htu_temp reading suspect
+HUM_THRESHOLD = 3.5             # %RH, jump between consecutive minutes that makes an htu_hum/sth_hum reading suspect
+TEMP_STATION_THRESHOLD = 2.0    # °C, max distance of a suspect htu_temp from the station's other temperature sensors
+HUM_SITE_THRESHOLD = 5.0        # %RH, max distance of a suspect humidity reading from the closest 3D-PAWS station at the site
+
+# Minimum MAD (Hampel) and minimum rolling std (z-score) for Phase 6: the coarsest resolution each column
+# is recorded at. Without a floor, a flat or near-flat window gives MAD = 0 / a tiny std, and a reading that
+# differs from its neighbours by a single resolution step is flagged as an outlier.
+# 3D-PAWS: 0.01 (SD-card era) or 0.1 (CHORDS era); MCP9808 0.0625 or 0.1. See docs/potential-fixes.md (noise floor).
+RESOLUTION_FLOOR = {
+    "temperature": 0.1, "humidity": 1.0, "actual_pressure": 0.1, "sea_level_pressure": 0.1,     # TSMS reference
+    "bmp2_temp": 0.1, "htu_temp": 0.1, "sth_temp": 0.1, "mcp9808": 0.1,                          # 3D-PAWS
+    "bme2_hum": 0.1, "htu_hum": 0.1, "sth_hum": 0.1, "bmp2_pres": 0.1, "bmp2_slp": 0.1
+}
+
+site_stations = {
+    "Ankara":   ["TSMS00", "TSMS01", "TSMS02"],
+    "Konya":    ["TSMS03", "TSMS04", "TSMS05"],
+    "Adana":    ["TSMS06", "TSMS07", "TSMS08"]
+}
 
 station_variables = [ 
     "temperature", "humidity", "actual_pressure", "sea_level_pressure", "wind", "total_rainfall"
@@ -72,6 +107,59 @@ def coerce_non_timestamp_columns_to_numeric(df, timestamp_col='date'):
     non_ts_cols = [c for c in df.columns if c != timestamp_col]
     df[non_ts_cols] = df[non_ts_cols].apply(pd.to_numeric, errors='coerce')
     return df
+
+
+def step_suspect(s:pd.Series, threshold):
+    """
+    Flag readings that jump by more than threshold from the reading exactly one minute before or after.
+    s must have a sorted, unique DatetimeIndex. Both ends of a jump are flagged, since either could be the bad one.
+    """
+    t = s.index.to_series()
+    one_min = pd.Timedelta('1min')
+    jump_prev = (s.diff().abs() > threshold) & (t.diff() == one_min)
+    jump_next = ((s.shift(-1) - s).abs() > threshold) & ((t.shift(-1) - t) == one_min)
+    return (jump_prev | jump_next) & s.notna()
+
+
+def failure_mask(dates:pd.Series, start, end):
+    """True for dates inside a documented sensor-failure period (end=None: through the end of the record)."""
+    mask = dates >= pd.Timestamp(start)
+    if end is not None: mask &= dates <= pd.Timestamp(end)
+    return mask
+
+
+"""
+=============================================================================================================================
+Pre-pass: humidity from every 3D-PAWS station, used as the site cross-check in Phase 5.
+Each station runs one humidity sensor at a time (HTU21D before the SHT31D upgrade, SHT31D after), so the
+two columns are combined. Only null/range checks are applied here, and step-suspect readings are removed so a
+noisy neighbour can't vouch for a noisy reading.
+=============================================================================================================================
+"""
+print("Pre-pass: loading 3D-PAWS humidity for site cross-checks.")
+site_humidity = {}  # station -> humidity series indexed by date, suspect readings removed
+
+for station_dir, files in zip(station_directories, station_files):
+    paws_file = [f for f in files if f.startswith("TSMS")][0]
+    hum = pd.read_csv(
+        data_origin+station_dir+paws_file,
+        usecols=lambda c: c.strip() in ['date', 'htu_hum', 'sth_hum'],
+        low_memory=False
+    )
+    hum.columns = hum.columns.str.strip()
+    hum['date'] = pd.to_datetime(hum['date'])
+    hum = hum.sort_values('date').drop_duplicates('date', keep='first').set_index('date')
+
+    failures = sensor_failures.get(station_dir[8:14], [])
+    sensors = []
+    for col in ['htu_hum', 'sth_hum']:
+        h = pd.to_numeric(hum[col], errors='coerce')
+        h = h.where((h >= 0) & (h <= 100))  # also removes -999.99 nulls
+        for fail_col, start, end, _ in failures:  # a failed sensor can't vouch for its neighbours
+            if fail_col == col: h = h.where(~failure_mask(h.index.to_series(), start, end))
+        sensors.append(h.where(~step_suspect(h, HUM_THRESHOLD)))
+
+    site_humidity[station_dir[8:14]] = sensors[0].combine_first(sensors[1])
 
 
 for i in range(len(station_directories)):
@@ -345,7 +433,9 @@ for i in range(len(station_directories)):
         r. humidity readings at 1 -> 4 minute intervals. The same is true of the r. humidity trend --
         valid r. humidity readings would be interspersed with erroneous temperature data. 
         Timescales on the order of a few hours up to 2 months would be continuously affected by this 
-        sensor malfunction. Unfortunately due to time constraints, this data could not be removed. 
+        sensor malfunction. Unfortunately due to time constraints, this data could not be removed.
+        (Update 2026-09-28: Phase 5 now removes much of this with a step test checked against co-located
+        3D-PAWS sensors -- see docs/sensor-failures.md SF-03 for what it still misses.)
 
         A signal processing approach is proposed for future cleaning attempts. Complications arise 
         given the nature of the rate at which the "bit-switching" noise occurs -- because the rate 
@@ -535,58 +625,76 @@ for i in range(len(station_directories)):
             'outlier_type': outlier_reasons[3]
         })
         paws_outliers = pd.concat([paws_outliers, outliers_to_add], ignore_index=True)
-    
+
+    # Documented sensor failures -- whole periods removed (see sensor_failures and docs/sensor-failures.md)
+    for col, start, end, catalog_id in sensor_failures.get(station, []):
+        mask = failure_mask(paws_df_FILTERED['date'], start, end)
+        new_nulls = mask & paws_df_FILTERED[col].notna()
+        print(f"\tRemoving {catalog_id}: {station} {col} from {start} to {end or 'end of record'} ({new_nulls.sum()} readings)")
+
+        outliers_to_add = pd.DataFrame({
+            'date': paws_df_FILTERED.loc[new_nulls, 'date'],
+            'column_name': col,
+            'original_value': paws_df_FILTERED.loc[new_nulls, col],
+            'outlier_type': outlier_reasons[11]
+        })
+        paws_outliers = pd.concat([paws_outliers, outliers_to_add], ignore_index=True)
+        paws_df_FILTERED.loc[mask, col] = np.nan
+
 
     """
     ============================================================================================================================
-    Phase 5: Filter HTU noise using TSMS reference comparison (>10°C or >10% deviation)
+    Phase 5: Filter HTU21D "bit-switching" noise without using the TSMS reference.
+        A reading is suspect when it jumps by more than TEMP_THRESHOLD / HUM_THRESHOLD from the reading one minute
+        before or after. Suspect readings are then checked against independent 3D-PAWS sensors:
+            - humidity:     the other 3D-PAWS stations at the same site (each station has only one humidity sensor)
+            - htu_temp:     the median of the same station's other temperature sensors (bmp2_temp, mcp9808, sth_temp)
+        A suspect reading is removed if it disagrees with the check, or if there is nothing to check it against
+        (logged under a separate *_unverified reason so these can be counted or restored).
     ============================================================================================================================
     """
-    print("Phase 5: Filtering HTU noise using TSMS reference comparison.")
+    print("Phase 5: Filtering HTU noise using step test and co-located 3D-PAWS sensors.")
 
-    # Merge TSMS and PAWS on date for comparison
-    merged = pd.merge(
-        tsms_df_FILTERED[['date', 'temperature', 'humidity']],
-        paws_df_FILTERED[['date', 'htu_temp', 'htu_hum']],
-        on='date', how='inner'
-    )
+    station = station_directories[i][8:14]
+    site = next(k for k, v in site_stations.items() if station in v)
+    paws_indexed = paws_df_FILTERED.set_index('date')     # same row order as paws_df_FILTERED
 
-    # Calculate absolute differences
-    merged['temp_diff'] = np.abs(merged['temperature'] - merged['htu_temp'])
-    merged['hum_diff'] = np.abs(merged['humidity'] - merged['htu_hum'])
+    neighbours = pd.concat([site_humidity[s] for s in site_stations[site] if s != station], axis=1, sort=True)
+    station_temps = paws_indexed[['bmp2_temp', 'mcp9808', 'sth_temp']].median(axis=1)
 
-    # Identify HTU outliers vs TSMS reference
-    htu_temp_outliers = merged['temp_diff'] > TEMP_THRESHOLD
-    htu_hum_outliers = merged['hum_diff'] > HUM_THRESHOLD
+    phase5_checks = []  # (column, confirmed mask, unverified mask, confirmed reason, unverified reason)
 
-    # Log temperature outliers
-    if htu_temp_outliers.any():
-        outliers_to_add = pd.DataFrame({
-            'date': merged.loc[htu_temp_outliers, 'date'],
-            'column_name': 'htu_temp',
-            'original_value': merged.loc[htu_temp_outliers, 'htu_temp'],
-            'outlier_type': 'htu_tsms_temp_deviation'
-        })
-        paws_outliers = pd.concat([paws_outliers, outliers_to_add], ignore_index=True)
+    for col in ['htu_hum', 'sth_hum']:
+        h = paws_indexed[col]
+        suspect = step_suspect(h, HUM_THRESHOLD)
+        nb = neighbours.reindex(h.index)
+        has_nb = nb.notna().any(axis=1)
+        dev = nb.sub(h, axis=0).abs().min(axis=1)   # distance to the closest neighbouring station
+        phase5_checks.append((
+            col, suspect & has_nb & (dev > HUM_SITE_THRESHOLD), suspect & ~has_nb,
+            outlier_reasons[7], outlier_reasons[8]
+        ))
 
-    # Log humidity outliers  
-    if htu_hum_outliers.any():
-        outliers_to_add = pd.DataFrame({
-            'date': merged.loc[htu_hum_outliers, 'date'],
-            'column_name': 'htu_hum',
-            'original_value': merged.loc[htu_hum_outliers, 'htu_hum'],
-            'outlier_type': outlier_reasons[4]
-        })
-        paws_outliers = pd.concat([paws_outliers, outliers_to_add], ignore_index=True)
+    t = paws_indexed['htu_temp']
+    suspect = step_suspect(t, TEMP_THRESHOLD)
+    has_ref = station_temps.notna()
+    dev = (t - station_temps).abs()
+    phase5_checks.append((
+        'htu_temp', suspect & has_ref & (dev > TEMP_STATION_THRESHOLD), suspect & ~has_ref,
+        outlier_reasons[9], outlier_reasons[10]
+    ))
 
-    # Apply filters to paws_df_FILTERED
-    paws_df_FILTERED.loc[
-        paws_df_FILTERED['date'].isin(merged.loc[htu_temp_outliers, 'date']), 'htu_temp'
-    ] = np.nan
-
-    paws_df_FILTERED.loc[
-        paws_df_FILTERED['date'].isin(merged.loc[htu_hum_outliers, 'date']), 'htu_hum'
-    ] = np.nan
+    for col, confirmed, unverified, confirmed_reason, unverified_reason in phase5_checks:
+        for mask, reason in [(confirmed, confirmed_reason), (unverified, unverified_reason)]:
+            if not mask.any(): continue
+            outliers_to_add = pd.DataFrame({
+                'date': mask.index[mask],
+                'column_name': col,
+                'original_value': paws_indexed.loc[mask, col].to_numpy(),
+                'outlier_type': reason
+            })
+            paws_outliers = pd.concat([paws_outliers, outliers_to_add], ignore_index=True)
+            paws_df_FILTERED.loc[mask.to_numpy(), col] = np.nan
 
     
     """
@@ -616,12 +724,13 @@ for i in range(len(station_directories)):
         rolling_std = stats_base.rolling(window=window, center=True, min_periods=window//2).std()
         rolling_med = stats_base.rolling(window=window, center=True, min_periods=window//2).median()
 
-        rolling_std = rolling_std.replace(0, np.nan) # don't divide by zero
+        rolling_std = rolling_std.clip(lower=RESOLUTION_FLOOR[variable]) # near-flat windows: a single resolution step is not a 3-sigma event
 
         z_score = (original - rolling_mean) / rolling_std
 
 
         mad = (original - rolling_med).abs().rolling(window=window, center=True, min_periods=window//2).median()
+        mad = mad.clip(lower=RESOLUTION_FLOOR[variable])  # flat windows: don't flag single resolution steps
         hampel_threshold = threshold * 1.4826 * mad # 1.4826 rescales median absolute deviation to std (under gaussian assumption)
 
         mask_z = z_score.abs() > threshold
@@ -661,10 +770,11 @@ for i in range(len(station_directories)):
             rolling_std = stats_base.rolling(window=window, center=True, min_periods=window//2).std()
             rolling_med = stats_base.rolling(window=window, center=True, min_periods=window//2).median()
 
-            rolling_std = rolling_std.replace(0, np.nan)
+            rolling_std = rolling_std.clip(lower=RESOLUTION_FLOOR[var])
 
             z_score = (original - rolling_mean) / rolling_std
             mad = (original - rolling_med).abs().rolling(window=window, center=True, min_periods=window//2).median()
+            mad = mad.clip(lower=RESOLUTION_FLOOR[var])
 
             hampel_threshold = 3 * 1.4826 * mad
 
@@ -690,6 +800,38 @@ for i in range(len(station_directories)):
 
             paws_df_FILTERED.loc[new_null_z, var] = np.nan
             paws_df_FILTERED.loc[new_null_h, var] = np.nan
+
+    """
+    =============================================================================================================================
+    Phase 7: Daily completeness. After all other QC, a day's readings of a variable are kept only if at least
+    DAILY_COMPLETENESS of the day's 1,440 minutes have a valid value; otherwise the whole day is removed for that
+    variable (and logged). Applied per instrument and per variable, to TSMS and 3D-PAWS alike.
+    =============================================================================================================================
+    """
+    print(f"Phase 7: Removing days with < {DAILY_COMPLETENESS:.0%} valid minutes (per variable).")
+
+    for df_name, frame, columns in [
+        ("tsms", tsms_df_FILTERED, list(variable_mapper.keys())),
+        ("paws", paws_df_FILTERED, [v for vs in variable_mapper.values() for v in vs])
+    ]:
+        day = pd.to_datetime(frame['date']).dt.floor('D')
+        for col in columns:
+            if col not in frame.columns: continue
+            frame[col] = pd.to_numeric(frame[col], errors='coerce')
+            valid_per_day = frame[col].notna().groupby(day).transform('sum')
+            incomplete = (valid_per_day < DAILY_COMPLETENESS * 1440) & frame[col].notna()
+            if not incomplete.any(): continue
+
+            outliers_to_add = pd.DataFrame({
+                'date': frame.loc[incomplete, 'date'],
+                'column_name': col,
+                'original_value': frame.loc[incomplete, col],
+                'outlier_type': outlier_reasons[12]
+            })
+            if df_name == "tsms": tsms_outliers = pd.concat([tsms_outliers, outliers_to_add], ignore_index=True)
+            else:                 paws_outliers = pd.concat([paws_outliers, outliers_to_add], ignore_index=True)
+            frame.loc[incomplete, col] = np.nan
+
 
     """
     =========================================================================================================

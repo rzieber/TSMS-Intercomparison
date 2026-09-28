@@ -63,6 +63,16 @@ magnetic_declinations = [
     5.69    # Adana
 ]
 
+# Wind regimes (same definition as scripts/error/error-analysis.py): classified from the TSMS reference only.
+NONVARIABLE_THRESHOLD = 3.0     # m/s (~6 kt), reference's unadjusted 10-m speed
+h1 = 10.0   # TSMS anemometer height (m)
+h2 = 2.0    # 3D-PAWS anemometer height (m)
+hellman_exponents = {
+    "Ankara": 0.30,  # Urban
+    "Konya":  0.35,  # Urban + many obstacles  
+    "Adana":  0.25   # Suburban + grass
+}
+
 wind_direction_bias = [ # calculated from error-analysis.py
     -148.5, # Ankara
     -136.5, # Konya
@@ -383,158 +393,89 @@ for paws_name in station_order:
     """
     =============================================================================================================================
     Create wind rose plots of the 3D PAWS station data as well as the TSMS reference station. COMPLETE RECORDS
-    NOTE: still need to perform 10-min wind speed and dir averaging in order to capture steady state winds
+    Hourly values are 10-min vector averages over (:50, :00]. Every hour is classified from the TSMS reference ONLY:
+        non-variable = reference 10-min mean of the unadjusted 10-m speed >= NONVARIABLE_THRESHOLD (3.0 m/s, ~6 kt)
+        variable     = below that
+    Both roses of a regime use the same hours (hours where both instruments report), so they're directly comparable.
+    Zero-speed minutes are kept: they add a zero vector, so the stale 3D-PAWS vane direction carries no weight.
+    Hours whose vector-mean speed is 0 are calm -- they have no direction, so they're counted in the legend, not drawn.
     =============================================================================================================================
     """
-    print(f"{paws_name}: Wind roses.")
+    print(f"{paws_name}: Wind roses (all / variable / non-variable winds, classified by the reference).")
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=pd.errors.SettingWithCopyWarning)
         warnings.simplefilter("ignore", category=FutureWarning)
 
-        # 3D PAWS  ------------------------------------------------------------------------------------------------------------------
-        print(f"3D PAWS")
-        paws_df_FILTERED.reset_index(inplace=True)
-        paws_df_FILTERED['date'] = pd.to_datetime(paws_df_FILTERED['date'])
-
-        paws_df_FILTERED['wind_speed'] = pd.to_numeric(paws_df_FILTERED['wind_speed'], errors='coerce')
-
-        paws_df_FILTERED_2 = paws_df_FILTERED[ # exclude those rows where wind speed is zero (biases direction)
-            ((paws_df_FILTERED["wind_speed"].notna()) & (paws_df_FILTERED["wind_speed"] > 0))
-        ]
-        # paws_df_FILTERED_2 = paws_df_FILTERED_2[paws_df_FILTERED_2["wind_speed"] >= 3.0] # filter out variable winds 6 knots
-
-        # if paws_name.endswith("Ankara"):  # 12-6-2025 removed after realizing paws was aligned with tsms at installation
-        #     paws_df_FILTERED_2['wind_dir_true'] = (paws_df_FILTERED_2['wind_dir'] + magnetic_declinations[0] + wind_direction_bias[0]) % 360
-        # elif paws_name.endswith("Konya"):
-        #     paws_df_FILTERED_2['wind_dir_true'] = (paws_df_FILTERED_2['wind_dir'] + magnetic_declinations[1] + wind_direction_bias[1]) % 360
-        # else:
-        #     paws_df_FILTERED_2['wind_dir_true'] = (paws_df_FILTERED_2['wind_dir'] + magnetic_declinations[2] + wind_direction_bias[2]) % 360
-        
-        paws_df_FILTERED_2.set_index('date', inplace=True)
-
-        wind_speed_bins = [0, 2.0, 4.0, 6.0, 8.0, 10.0]       # for variable winds
+        site = instrument_to_site[paws_name]
+        top_of_hour = [51, 52, 53, 54, 55, 56, 57, 58, 59, 0]
+        wind_speed_bins = [0, 2.0, 4.0, 6.0, 8.0, 10.0]
         labels = ['0-2.0 m/s', '2.0-4.0 m/s', '4.0-6.0 m/s', '6.0-8.0 m/s', '8.0-10.0 m/s']
-        # wind_speed_bins = [2.0, 4.0, 6.0, 8.0, 10.0]         # for non-variable winds
-        # labels = [f"{wind_speed_bins[i]}–{wind_speed_bins[i+1]} m/s" for i in range(len(wind_speed_bins)-1)]
 
-        # Get 10-min average from (:50, :00]
-        # paws_topOfHour = paws_df_FILTERED_2[paws_df_FILTERED_2.index.minute in [51, 52, 53, 54, 55, 56, 57, 58, 59, 0]]
-        topOfHour_mask = paws_df_FILTERED_2.index.minute.isin([51, 52, 53, 54, 55, 56, 57, 58, 59, 0])
-        paws_topOfHour = paws_df_FILTERED_2[topOfHour_mask]
-        hourly_avgs = paws_topOfHour.groupby(
-            paws_topOfHour.index.floor('H') + pd.Timedelta('1H')).apply(func.paws_hourly_vectorial)
-        hourly_avgs.index.name = 'end_time'
+        # 3D PAWS -----------------------------------------------------------------------------------------------------------------
+        paws_wind = paws_df_FILTERED[['date', 'wind_speed', 'wind_dir']].copy()
+        paws_wind['date'] = pd.to_datetime(paws_wind['date'])
+        paws_wind['wind_speed'] = pd.to_numeric(paws_wind['wind_speed'], errors='coerce')
+        paws_wind = paws_wind.dropna(subset=['wind_speed', 'wind_dir']).set_index('date')
+        paws_wind = paws_wind[paws_wind.index.minute.isin(top_of_hour)]
+        paws_hourly = paws_wind.groupby(paws_wind.index.floor('h') + pd.Timedelta('1h')).apply(func.paws_hourly_vectorial)
 
-        # df_10min = paws_df_FILTERED_2.resample('10min', closed='right', label='right').mean()
-        # df_10min_topOfHour = df_10min[df_10min.index.minute == 0]
+        # TSMS: Hellmann-adjusted 2-m speed for the rose, unadjusted 10-m speed for the regime ---------------------------------
+        tsms_wind = tsms_df_FILTERED[['date', 'avg_wind_speed', 'avg_wind_dir']].copy()
+        tsms_wind['date'] = pd.to_datetime(tsms_wind['date'])
+        tsms_wind = tsms_wind.dropna().set_index('date')
+        tsms_wind['avg_wind_speed_2m'] = tsms_wind['avg_wind_speed'] * ((h2 / h1) ** hellman_exponents[site])
+        tsms_wind = tsms_wind[tsms_wind.index.minute.isin(top_of_hour)]
+        tsms_groups = tsms_wind.groupby(tsms_wind.index.floor('h') + pd.Timedelta('1h'))
+        tsms_hourly = tsms_groups.apply(func.tsms_hourly_vectorial)
+        tsms_hourly['ref_speed_10m'] = tsms_groups['avg_wind_speed'].mean()
 
-        # first_timestamp = pd.to_datetime(paws_df_FILTERED_2.index[0])
-        # last_timestamp = pd.to_datetime(paws_df_FILTERED_2.index[-1])
-        first_timestamp = pd.to_datetime(hourly_avgs.index[0])
-        last_timestamp = pd.to_datetime(hourly_avgs.index[-1])
-
-        # paws_df_FILTERED_2.loc[:, 'wind_speed_category'] = pd.cut(paws_df_FILTERED_2['wind_speed'], bins=wind_speed_bins, labels=labels, right=False)
-        hourly_avgs.loc[:, 'wind_speed_category'] = pd.cut(hourly_avgs['ws_avg'], bins=wind_speed_bins, labels=labels, right=False)
-
-        # ax = WindroseAxes.from_ax()
-        # ax.bar(paws_df_FILTERED_2['wind_dir'], paws_df_FILTERED_2['wind_speed'], normed=True, opening=0.8, edgecolor='white', bins=wind_speed_bins)
-        # ax.set_legend(title=f"{paws_name} Wind Rose (m/s)", labels=labels)
-        ax = WindroseAxes.from_ax()
-        ax.bar(hourly_avgs['wd_avg'], hourly_avgs['ws_avg'], normed=True, opening=0.8, edgecolor='white', bins=wind_speed_bins)
-        ax.set_legend(title=f"{paws_name} Wind Rose (m/s)", labels=labels)
-
-        ax.set_rmax(35)
-        ax.set_yticks([7, 14, 21, 28, 35])
-        ax.set_yticklabels(['7%', '14%', '21%', '28%', '35%']) # for variable winds
-        # ax.set_rmax(80)
-        # ax.set_yticks([16, 32, 48, 64, 80])
-        # ax.set_yticklabels(['16%', '32%', '48%', '64%', '80%']) # for NON-VARIABLE winds
-            
-        ax.grid(True, linewidth=0.5)  # Thinner grid lines can improve readability
-
-        # plt.savefig(data_destination / "wind-roses" / f"{paws_name}" / f"{paws_name}_nonvariable_winds_[10-MIN-AVG].png")
-        plt.savefig(data_destination / "wind-roses" / f"{paws_name}" / f"{paws_name}_variable_winds_[10-MIN-AVG].png")
-        plt.clf()
-        plt.close()
-
-        
-        # TSMS ----------------------------------------------------------------------------------------------------------------------
-        print("TSMS")
-        tsms_df_FILTERED.reset_index(inplace=True)
-        tsms_df_FILTERED['date'] = pd.to_datetime(tsms_df_FILTERED['date'])
-
-        tsms_df_FILTERED_2 = tsms_df_FILTERED[
-            ~((tsms_df_FILTERED['avg_wind_speed'] == 0.0) & (tsms_df_FILTERED['avg_wind_dir'] == 0.0)) # filter out 0.0 pair wind speed & dir
-        ] 
-        # tsms_df_FILTERED_2 = tsms_df_FILTERED[tsms_df_FILTERED['avg_wind_speed'] >= 3.0] # filter out variable winds
-
-        # Apply Hellman correction to 2m
-        h1 = 10.0 
-        h2 = 2.0  
-        hellman_exponents = {
-            "Ankara": 0.30,  # Urban
-            "Konya":  0.35,  # Urban + many obstacles  
-            "Adana":  0.25   # Suburban + grass
+        common = paws_hourly.index.intersection(tsms_hourly.index)
+        ref_speed = tsms_hourly.loc[common, 'ref_speed_10m']
+        regime_hours = {
+            'all':          common,
+            'variable':     common[ref_speed < NONVARIABLE_THRESHOLD],
+            'nonvariable':  common[ref_speed >= NONVARIABLE_THRESHOLD],
         }
-        if paws_name.endswith("Ankara"):
-            tsms_df_FILTERED_2['avg_wind_speed_2m'] = tsms_df_FILTERED_2['avg_wind_speed'] * \
-                ((h2 / h1) ** hellman_exponents["Ankara"])
-        elif paws_name.endswith("Konya"):
-            tsms_df_FILTERED_2['avg_wind_speed_2m'] = tsms_df_FILTERED_2['avg_wind_speed'] * \
-                ((h2 / h1) ** hellman_exponents["Konya"])
-        else:
-            tsms_df_FILTERED_2['avg_wind_speed_2m'] = tsms_df_FILTERED_2['avg_wind_speed'] * \
-                ((h2 / h1) ** hellman_exponents["Adana"])
-        
-        tsms_df_FILTERED_2.set_index('date', inplace=True)
+        regime_titles = {
+            'all':          "all winds",
+            'variable':     f"variable winds (ref. < {NONVARIABLE_THRESHOLD} m/s at 10 m)",
+            'nonvariable':  f"non-variable winds (ref. ≥ {NONVARIABLE_THRESHOLD} m/s at 10 m)",
+        }
 
-        topOfHour_mask = tsms_df_FILTERED_2.index.minute.isin([51, 52, 53, 54, 55, 56, 57, 58, 59, 0])
-        tsms_topOfHour = tsms_df_FILTERED_2[topOfHour_mask]
-        hourly_avgs = tsms_topOfHour.groupby(
-            tsms_topOfHour.index.floor('H') + pd.Timedelta('1H')).apply(func.tsms_hourly_vectorial)
-        hourly_avgs.index.name = 'end_time'
+        out_dir = data_destination / "wind-roses" / paws_name
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-        # df_10min = tsms_df_FILTERED_2.resample('10min', closed='right', label='right').mean()
-        # df_10min_topOfHour = df_10min[df_10min.index.minute == 0]
+        for regime, hours in regime_hours.items():
+            roses = [
+                (paws_hourly.loc[hours], f"{paws_name}",            out_dir / f"{paws_name}_{regime}_winds_[10-MIN-AVG].png"),
+                (tsms_hourly.loc[hours], f"TSMS Reference {site}",  out_dir / f"TSMS-Reference_{site}_{regime}_winds_[10-MIN-AVG].png"),
+            ]
+            if any((r[0]['ws_avg'] > 0).sum() == 0 for r in roses):
+                print(f"\t{regime}: no non-calm hours for one of the instruments -- skipped")
+                continue
 
-        # tsms_subset = tsms_df_FILTERED_2.loc[first_timestamp:last_timestamp]
-        tsms_subset = hourly_avgs.loc[first_timestamp:last_timestamp]
+            axes = []
+            for hourly, name, path in roses:
+                calm = hourly['ws_avg'] <= 0
+                windy = hourly[~calm]
+                ax = WindroseAxes.from_ax()
+                ax.bar(windy['wd_avg'], windy['ws_avg'], normed=True, opening=0.8, edgecolor='white', bins=wind_speed_bins)
+                ax.set_legend(title=f"{name} (m/s)\n{regime_titles[regime]}\n{len(hourly)} h, calm {100 * calm.mean():.1f}%", labels=labels,
+                              loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=8, title_fontsize=8)
+                axes.append((ax, path))
 
-        tsms_subset.loc[:, 'wind_speed_category'] = pd.cut(tsms_subset['ws_avg'], bins=wind_speed_bins, labels=labels, right=False)
+            # same radial scale for the 3D-PAWS and TSMS roses of a regime
+            rmax = 5 * np.ceil(max(ax._info['table'].sum(axis=0).max() for ax, _ in axes) / 5)
+            ticks = np.linspace(rmax / 5, rmax, 5)
+            for ax, path in axes:
+                ax.set_rmax(rmax)
+                ax.set_yticks(ticks)
+                ax.set_yticklabels([f"{t:.0f}%" for t in ticks])
+                ax.grid(True, linewidth=0.5)
+                ax.figure.savefig(path, bbox_inches="tight")
+                plt.close(ax.figure)
 
-        ax = WindroseAxes.from_ax() # TSMS data was already cleaned
-        ax.bar(tsms_subset['wd_avg'], tsms_subset['ws_avg'], normed=True, opening=0.8, edgecolor='white', bins=wind_speed_bins)
-        
-        if paws_name.endswith("Ankara"):
-            ax.set_legend(title=f"TSMS Reference at Ankara (m/s)", labels=labels)
-        elif paws_name.endswith("Konya"):
-            ax.set_legend(title=f"TSMS Reference at Konya (m/s)", labels=labels)
-        else: 
-            ax.set_legend(title=f"TSMS Reference at Adana (m/s)", labels=labels)
-        
-        
-        ax.set_rmax(35)
-        ax.set_yticks([7, 14, 21, 28, 35])
-        ax.set_yticklabels(['7%', '14%', '21%', '28%', '35%']) # for variable winds
-        # ax.set_rmax(80)
-        # ax.set_yticks([16, 32, 48, 64, 80])
-        # ax.set_yticklabels(['16%', '32%', '48%', '64%', '80%']) # for non-variable winds
-
-        ax.grid(True, linewidth=0.5)  # Thinner grid lines can improve readability
-
-        if paws_name.endswith("Ankara"):
-            # plt.savefig(data_destination / "wind-roses" / "Ankara" /  f"TSMS-Reference_Ankara_nonvariable_winds_[10-MIN-AVG].png")
-            plt.savefig(data_destination / "wind-roses" / "Ankara" /  f"TSMS-Reference_variable_winds_[10-MIN-AVG].png")
-        elif paws_name.endswith("Konya"):
-            # plt.savefig(data_destination / "wind-roses" / "Konya" /  f"TSMS-Reference_Konya_nonvariable_winds_[10-MIN-AVG].png")
-            plt.savefig(data_destination / "wind-roses" / "Konya" /  f"TSMS-Reference_variable_winds_[10-MIN-AVG].png")
-        else:
-            # plt.savefig(data_destination / "wind-roses" / "Adana" /  f"TSMS-Reference_Adana_nonvariable_winds_[10-MIN-AVG].png")
-            plt.savefig(data_destination / "wind-roses" / "Adana" /  f"TSMS-Reference_variable_winds_[10-MIN-AVG].png")
-        
-        plt.clf()
-        plt.close()
+            print(f"\t{regime}: {len(hours)} hours")
 
 
 

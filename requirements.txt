@@ -1,7 +1,7 @@
 numpy
 pandas
-scipy
-scikit-learn
+scipy.stats
+scikit-learn.metrics
 matplotlib
 seaborn
 windrose

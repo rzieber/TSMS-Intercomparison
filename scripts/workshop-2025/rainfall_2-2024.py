@@ -43,7 +43,7 @@ for csv in reformatted_data.rglob("*.csv"):
 print("QC-ed ------------------------------")
 
 qc_dfs = []
-for csv in qc_data.rglob("*_Adana_final.csv"):
+for csv in qc_data.glob("*_Adana_final.csv"):   # top level only, so backup subfolders are never read
     name = str(csv.stem)
 
     df = pd.read_csv(csv, parse_dates=['date'])
