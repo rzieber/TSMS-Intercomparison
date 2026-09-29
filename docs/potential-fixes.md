@@ -17,7 +17,7 @@ Last updated 2026-09-28 (PF-10, PF-28 done; PF-23 to PF-31 added; PF-27 closed a
 | ID | Area | Idea | Priority | Status |
 |---|---|---|---|---|
 | PF-01 | Cleaning, Phase 6 | Set the Hampel/z-score floor at the sensor's noise level instead of its resolution | Low | Deferred |
-| PF-02 | Cleaning, Phase 6 | Use time-based rolling windows (e.g. `'20min'`) instead of 20 rows | Medium | Open |
+| PF-02 | Cleaning, Phase 6 | Use time-based rolling windows (e.g. `'20min'`) with a minimum data share (≥ 60%); readings in too-sparse windows become "untested", not flagged. Current data isn't on a regular grid (TSMS03: 91% of minutes present, longest gap 316 h), so a "20-row" window can span days | Medium | Open (part of PF-35 stage 4) |
 | PF-03 | Cleaning, Phase 5 | Flag the middle of multi-minute bit-switching runs, not just their edges | Medium | Open |
 | PF-04 | Cleaning, Phase 5 | Apply Phase 4 manual removals to neighbour humidity in the pre-pass | Low | Open |
 | PF-05 | Cleaning, Phase 1 | Treat `-1000.0`, `-999.9` (TSMS08 pressure) and `-999.0` (TSMS06 wind_dir) as null markers alongside `-999.99` | Low | Open |
@@ -37,7 +37,7 @@ Last updated 2026-09-28 (PF-10, PF-28 done; PF-23 to PF-31 added; PF-27 closed a
 | PF-19 | Analysis, wind speed | Sensitivity run with and without the Hellmann height correction | Low | Open |
 | PF-20 | Investigation | TSMS03/04 wind speed anomaly (SF-08), `sth_hum` biases at TSMS02/06 (SF-06/07), TSMS04 precursor on 29–30 Nov 2024 | Medium | Open |
 | PF-21 | Investigation | Is `bmp2_temp` an air temperature, or enclosure temperature? | Low | Open |
-| PF-22 | Cleaning | Detect persistent (non-jumping) failures automatically, e.g. long runs of a constant value or physically impossible values | Medium | Open |
+| PF-22 | Cleaning | Persistence ("minimum required variability", WMO-No. 8 Vol. III Ch. 1) per variable, plus a simultaneous-exact-zeros check across chips (SF-17). Rain excluded: zero runs are its normal state | Medium | In progress (PF-35 stages 2–3) |
 | PF-23 | Plots, wind | Monthly wind-rose block (commented out) still filters each instrument on its own speed | Low | Open |
 | PF-24 | Plots, wind | Hourly speed in the wind roses is the vector-mean speed, which reads low in variable winds; `_vectorial_wind_average` also returns NaN if any minute is NaN | Medium | Open |
 | PF-25 | Analysis, wind | Regime threshold uses the reference's 10-m speed; consider 2-m (Hellmann-adjusted) speed or a sensitivity check | Low | Open |
@@ -45,8 +45,15 @@ Last updated 2026-09-28 (PF-10, PF-28 done; PF-23 to PF-31 added; PF-27 closed a
 | PF-27 | Investigation, wind | Ankara/Konya: 3D-PAWS much weaker and rotated in non-variable winds (TSMS01: 0.68 vs. 2.23 m/s, +30° to +66°). Figure: [figures/tsms01-nonvariable-windrose-vs-reference.png](figures/tsms01-nonvariable-windrose-vs-reference.png) | High | **Closed 2026-09-28: known siting limitation** (Konya courtyard/brick wall, Ankara hill), documented in [siting.md](siting.md) |
 | PF-28 | Data pipeline | Re-map CHORDS columns for misaligned periods (SF-10), rebuild `data/reformatted` → `data/cleaned`, remove the SF-01/SF-02 removals | **Critical** | **Done 2026-09-28**: Dec 2024+ spliced, Jan–Mar 2024 re-mapped (TSMS04 temperatures excluded, SF-15), `data/cleaned` regenerated |
 | PF-32 | Analysis, wind | Estimate the anemometer starting threshold (Annex 1.G: ≤ 0.5 / 1.0 / 2.5 m/s), e.g. the lowest reference speed at which the 3D-PAWS cup reports > 0 in most minutes (Adana only) | Medium | Open |
-| PF-33 | Analysis | Eₙ score (Vol. V Ch. 4 §2.4): needs the reference instruments' expanded uncertainty. Sensor models give a type-B estimate; calibration certificates make it rigorous | Medium | Open (ask TSMS) |
+| PF-33 | Analysis | Eₙ score (Vol. V Ch. 4 §2.4): needs the reference instruments' expanded uncertainty. Models now known (Lastem DNA002/DNA011, Rotronic MP101A, Druck RPT200; `docs/TSMS Sensors.docx`): look up datasheets for a type-B estimate; calibration certificates make it rigorous | Medium | Open (ask TSMS for calibration records) |
 | PF-34 | Analysis | OSCAR tier for humidity: convert both instruments' RH (with T, p) to specific humidity and compare with OSCAR PBL requirements | Low | Open |
+| PF-35 | Cleaning | **Restructure QC into single-purpose steps** (below), each logged separately; output good/suspect/failed with a reason; remove only "failed"; rain flag-only (`tipping_flag`) | High | Planned (6 stages) |
+| PF-36 | Cleaning | Step (rate-of-change) test for **all** variables, per-variable limits (instrument spec / climatology), not just the HTU | Medium | Planned (PF-35 stage 3) |
+| PF-37 | Cleaning | Neighbour (spatial) check for all variables; mark a 3D-PAWS station suspect when it departs from the other two; mark the **reference** suspect only for gross, event-level disagreements (e.g. reference dry while ≥ 2 3D-PAWS gauges record > X mm), never for systematic biases (common-mode shields/siting). Reference-suspect pairs are excluded from the comparison and reported to TSMS | Medium | Planned (PF-35 stage 5) |
+| PF-38 | Cleaning | Diagnostics step: documented failures/exclusions, maintenance and firmware events, battery/power (`Battery Charge (%)` in the Particle files), logger resets. Non-measurement information only; separate from persistence | Medium | Planned (PF-35 stage 2) |
+| PF-39 | Cleaning | Review TSMS's climatological limits ("varies by month", values not given): extract Table 1, compare with ours (fixed ±50 °C), adopt site/month limits where defensible | Medium | Open |
+| PF-40 | Analysis, rain | Wet-day threshold: report 1.0 mm (ETCCDI R1mm convention) as the headline and 0.2 mm for report parity. At 1.0 mm Konya FAR 0.56–0.66 → 0.25–0.35, CSI 0.30–0.39 → 0.50–0.69 | Medium | Open |
+| PF-41 | Cleaning, rain | Rain vs. RH consistency as a **flag**, not a removal (TSMS removes rain at RH < 60%: 2–8% of reference rain, 22% of TSMS03's; real rain days affected) | Low | Planned (PF-35 stage 3/6) |
 | PF-31 | Analysis | Sensitivity run: key statistics with and without the inferred Jan–Mar 2024 windows ([methods.md](methods.md) §4) | Medium | Open |
 | PF-30 | Data pipeline | Fold the Dec 2024 splice into `final_paws_reformatter.py`, whose CHORDS input path points outside the repo and no longer exists | Medium | Open |
 | PF-29 | Documentation | Add site descriptions, photos, sensor heights, and obstruction distances to `siting.md` | Low | Open |
@@ -282,3 +289,37 @@ For each station/sensor/variable, compute the bias and U95 (95th percentile of
 required/achievable values for context. Report it as conservative: the differences include
 siting (Annex 1.D, separate in the WMO scheme) and the reference's own uncertainty. This goes
 beyond the TSMS report, which makes no WMO comparison (method-differences G8).
+
+## Plot backlog (2026-09-28)
+
+Suggested additions to `scripts/plotter/plot-gen-final.py`, ranked by value. Report figure
+numbers in brackets.
+
+| ID | Plot | Why | Priority |
+|---|---|---|---|
+| PL-01 | Daily cycle of the **bias** by site (hour of day; median + IQR band), T and RH; plus a month × hour bias heatmap per sensor [report 6.9, 7.5, 8.3 show values, not bias] | Radiation-shield heating/cooling, Konya courtyard effects, HTU winter bias (SF-04) | High |
+| PL-02 | Temperature bias binned by reference wind speed and by SI1145 VIS (sunlight proxy) | Separates shield effects from sensor error | High |
+| PL-03 | Cumulative rainfall per site, all four gauges on one axis (double-mass style) [10.1, 10.2 are monthly totals] | Shows SF-09, SF-11, SF-12, SF-16 in one figure per site | High |
+| PL-04 | CDF of \|3D-PAWS − TSMS\| for every variable, with Annex 1.G Class A/B/C limits marked [8.7 does pressure only] | Visual version of the WMO classification (95% crossing = class) | High |
+| PL-05 | Wind: speed ratio and direction error binned by reference speed | Starting threshold (PF-32), sheltering at Konya/Ankara, justifies the 3 m/s regime split | Medium |
+| PL-06 | Data-availability timeline: station × month % valid minutes per variable, with excluded / recovered / failure periods shaded | Supports methods (what was kept, removed, recovered) | Medium |
+| PL-07 | POD / FAR / CSI, ours vs. the report [10.3], at 0.2 and 1.0 mm (PF-40) | Rain comparison in one chart | Medium |
+| PL-08 | Pressure bias over time (monthly median + IQR) | Shows TSMS04 drift (SF-18); cleaner than the current difference time series | Medium |
+| PL-09 | Bland–Altman for T and RH [8.5 does pressure only] | Optional parity with the report | Low |
+| PL-10 | Taylor diagrams [6.8] | Only for figure-for-figure parity; adds little beyond the tables | Low |
+| PL-11 | Replace raw-value box / violin / histogram plots (redundant) with distributions of the **differences** [6.5–6.7, 8.2] | Less redundancy; shows error, not climate | Low |
+
+## Presentation deliverables (planned after the cleaning and analysis fixes)
+
+Built from the regenerated statistics and plots. Both are in the same order and numbered to match.
+
+| ID | Deliverable | Audience | Content |
+|---|---|---|---|
+| PD-01 | **Speaker notes** (private artifact) | Presenter only | Section-by-section talking points keyed to each numbered visual: the point to make, supporting numbers, caveats (e.g. siting, SF-17, recovered windows), likely questions and answers, and what's still outstanding. Replaces the text-heavy "TSMS Report Cross-Check" page as the presenter's guide |
+| PD-02 | **Visuals deck** (artifact, or PDF if preferred) | Team | One plot or table per section, a short caption or 2–4 bullets, no paragraphs. Same order and numbering as PD-01 |
+
+Order (draft): takeaways → **cleaning practice (WMO principles, the PF-35 step framework, how it
+applies to each sensor)** → agreement (bias dot plots, wind-direction table) → Konya gap →
+rainfall (wet days at 0.2 and 1.0 mm, cumulative curves PL-03, POD/FAR/CSI PL-07) → CHORDS column
+fix (before/after) → QC flaw (removal table) → WMO framing (class grid, error CDFs PL-04) → siting
+(wind error vs. speed PL-05) → questions for TSMS → next steps.

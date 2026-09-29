@@ -7,7 +7,7 @@ understand each divergence and collect feedback for TSMS.
 **Status key:** `Same` = methods agree · `Differs` = deliberate or known difference ·
 `Open` = unresolved question/discrepancy · `Ours` = issue on our side to fix · `Feedback` = point to raise with TSMS
 
-Report section/page references are to the draft PDF. Last updated 2026-09-28 (added G11–G16; WS2, WD5, WD2 updated for wind regimes; questions 6–7).
+Report section/page references are to the draft PDF. Last updated 2026-09-29 (G11–G19; questions reordered, Konya first). Restored 2026-09-29 after a `git filter-repo` reset discarded uncommitted edits.
 
 ---
 
@@ -31,6 +31,9 @@ Report section/page references are to the draft PDF. Last updated 2026-09-28 (ad
 | G14 | Stuck humidity sensors (TSMS03 SHT31D ~2 %RH, TSMS04 HTU21D 0 %RH, from 1 Dec 2024) | Not mentioned. Table 1's interval test (0–105 %RH) accepts both. Its humidity persistence test covers only 0 < RH ≤ 105, so a run of exact 0s wouldn't count. Its spatial check vs. the site median (§4.5) would give a median near 2 %RH while both fail, which flags the **working** station (TSMS05), not the failed ones | Removed as documented failures SF-01/SF-02 ([sensor-failures.md](sensor-failures.md)) | Open / Feedback |
 | G15 | Rolling z-score in near-flat windows | \|z\| > 3.0 over a 61-point window (§4.4). **Same quantization flaw:** in a window that is almost constant, the std is tiny, so a single resolution step scores a large z (≈ 7.7 for one step in 61 identical values). On the Konya reference (61-row window) it flags 0.01% of temperature, 0.13% of humidity, and 0.10% of pressure readings, and 69–96% of those flags are within about one resolution step of the window mean. **Precipitation is much worse:** std = 0 in ~97% of windows, and an isolated tip among zeros is always \|z\| > 3. Report-style z-scoring alone flags 34% of rainy minutes and 35% of total rain at the Konya reference gauge, 25% / 24% at Adana, and 12% / 21% at Ankara. This is independent of the MAD issue in G12. The report doesn't say how std = 0 is handled | 20-row window; not applied to rain. **Fixed 2026-09-28:** std floored at each column's resolution (`RESOLUTION_FLOOR`), so a reading must be more than 3 steps from the window mean in flat conditions | Differs / Feedback |
 | G16 | CHORDS column misalignment (SF-10) | Report doesn't say where its 3D-PAWS data came from. Its tables include TSMS02–05 and 08 for the whole study period, e.g. TSMS03 has 973 valid rain days and TSMS08 wind direction MAE 17.08°, both plausible, so it may have used a correctly labeled source or re-mapped the columns | Our data was mislabeled for TSMS02, 03, 04, 05, 08 during Jan–mid-Mar 2024 and Dec 2024 → end (every variable). Dec 2024+ is likely a copy-paste of a CHORDS batch under an older header; Jan–Mar 2024 is not, and is suspected to be a firmware/software change at 2024-03-11 00:00 UTC (SF-10). **Dec 2024+ fixed 2026-09-28** in `data/reformatted` (`data/cleaned` not yet regenerated); Jan–mid-Mar 2024 still open (PF-28) | Ours / Open |
+| G17 | Side-by-side results (2026-09-28, `scripts/comparison/compare_with_report.py`, report period and definitions) | Tables 4, 6, 7, 8, 9 | **Agree:** Ankara and Adana temperature and pressure match to about 0.01 (e.g. TSMS00 T bias 0.060 vs. 0.056 °C; P 1.041 vs. 1.028 hPa); wind direction within 1–7° of Table 8; 3D-PAWS wet-day counts close (226 vs. 220 at TSMS00). **Disagree:** Konya T bias +0.90 to +1.16 °C (report) vs. −0.18 to +0.13 (ours), and P −1.1 to −2.4 vs. −0.8 to +0.4 hPa. Not a timezone offset (±1–3 h tested) and not any single period. Reference wet days: report 76–181 vs. ours 214–434 (Adana 80 vs. ≈ 430), so the report's FAR (0.61–0.72) is inflated relative to ours (0.14–0.32 at Ankara and Adana; Konya matches) | Open / Feedback |
+| G18 | Outlier window width | 61-point window (§4.4); unclear whether rows or minutes | 20 rows (time-based planned). Measured on Konya reference T (floored MAD): 61 flags ≈ 25× more than 20 (0.20% vs. 0.008%), and 68% of its flags are real events also seen at the 3D-PAWS neighbours | Differs / Feedback |
+| G19 | Rain / humidity logic test | Rain removed when RH < 60% (Table 1); which RH isn't stated | Not applied (planned as a flag only). The rule would remove 4% (Konya), 8% (Adana), 2% (Ankara) of reference rain (60% of Ankara's affected minutes are on ≥ 5 mm days) and 22% of TSMS03's rain | Differs / Feedback |
 
 ## Wind speed
 
@@ -77,7 +80,7 @@ It's worth asking TSMS how 3D-PAWS calm records were handled.
 | # | Topic | Report | Ours | Status |
 |---|---|---|---|---|
 | P1 | Zero / dry periods | Kept. Dry–dry days are Correct Negatives in the contingency table (Table 9) | Time steps where both gauges read 0 are **excluded** from bias, MAE, RMSE, SD, r, and reliability | Differs |
-| P2 | Metrics | Monthly totals: Bias and R² (§3.10, Fig. 10.2). Daily wet/non-wet (≥ 0.2 mm/day): POD, FAR, CSI (Table 9) | Per-timestep bias, MAE, RMSE, SD, r, reliability on hourly/daily sums. No monthly totals, no contingency scores | Differs |
+| P2 | Metrics | Monthly totals: Bias and R² (§3.10, Fig. 10.2). Daily wet/non-wet (≥ 0.2 mm/day): POD, FAR, CSI (Table 9) | Per-timestep bias, MAE, RMSE, SD, r, reliability on hourly/daily sums. No monthly totals, no contingency scores | Differs. **Wet-day threshold:** report uses 0.2 mm (one tip); we'll headline 1.0 mm (ETCCDI R1mm) and keep 0.2 mm for parity (PF-40) |
 | P3 | QC outlier test on precip | Rolling 61-pt MAD (> 3.5) / z-score (> 3.0) applied to "all meteorological variables" (§4.4, Fig. 4.1). Not stated whether used on precip or on reference data. If it was, the z-score part alone removes 12–34% of reference rainy minutes (21–35% of total rain); see G15 | None applied | Open / Feedback |
 | P4 | Effect of P3 if applied | — | Simulated on our cleaned 1-min data: removes 73–95% of rainy minutes (Adana ref wet days 459 → 53; Konya ref 264 → 12; TSMS06 201 → 27; TSMS00 241 → 10). Mostly-zero windows give MAD = 0, so every tip gets flagged | Feedback |
 | P5 | Reference wet-day counts | Implied reference wet days (Hits + Misses): Adana ≈ 80, Konya ≈ 180, Ankara ≈ 76–104 over ~870–1,050 paired days | Raw reference, ≥ 0.2 mm, 80%-complete days: Adana 459 / 1,179, Konya 264 / 1,181 | Open / Feedback |
@@ -97,18 +100,20 @@ gauges? (3) how do the QC'd reference daily totals compare with TSMS's official 
 
 ## Questions for TSMS
 
-1. Was the rolling MAD/z-score outlier test applied to minute-level precipitation, and to the reference gauges? (P3–P5) How is MAD = 0 handled (a floor, skipping the window, or dividing by zero)? What fraction of each variable did the test remove? (G12)
-2. How were 3D-PAWS calm records (speed 0 with a non-zero, stale direction) handled? (WD5)
-3. Was any signed wind-direction bias computed? Is a systematic vane offset ruled out by measurement or by assumption? (WD2)
-4. Which timezone are the raw TSMS and 3D-PAWS minute files in, before conversion to UTC? (G5)
-5. Can we get the QC'd minute-level dataset behind Tables 8 and 9, so we can reproduce the Adana wind-direction and reference wet-day numbers? (WD7, P5)
-6. Which 3D-PAWS data source did the report use for Jan 2024 – Nov 2025, and was the CHORDS column-order change handled? (G16) This could also explain part of the gap between our and their wind-direction results (WD7). Specifically:
+1. **Konya (highest priority):** which reference and 3D-PAWS series produced the report's Konya biases (T +0.90 to +1.16 °C, P −1.1 to −2.4 hPa)? Ankara and Adana match our numbers to about 0.01 (G17).
+2. Was the rolling MAD/z-score outlier test applied to minute-level precipitation, and to the reference gauges? (P3–P5) How is MAD = 0 handled (a floor, skipping the window, or dividing by zero)? What fraction of each variable did the test remove? (G12)
+3. How were 3D-PAWS calm records (speed 0 with a non-zero, stale direction) handled? (WD5)
+4. Was any signed wind-direction bias computed? Is a systematic vane offset ruled out by measurement or by assumption? (WD2)
+5. Which timezone are the raw TSMS and 3D-PAWS minute files in, before conversion to UTC? (G5)
+6. Can we get the QC'd minute-level dataset behind Tables 8 and 9, so we can reproduce the Adana wind-direction and reference wet-day numbers? (WD7, P5)
+7. Which 3D-PAWS data source did the report use for Jan 2024 – Nov 2025, and was the CHORDS column-order change handled? (G16) This could also explain part of the gap between our and their wind-direction results (WD7). Specifically:
    - Did TSMS notice that at TSMS02, 03, 04, 05 and 08 the column order changes at **2024-03-11 00:00 UTC** (Jan–Mar 2024 rows out of header order) and again from **2024-12-01**?
    - If so, how were the columns re-assigned, and in particular how were **TSMS04's three temperature sensors** (HTU21D, BMP280, MCP9808) told apart for 12 Jan – 10 Mar 2024? We could not do so reliably and excluded them (methods.md §3).
    - If not, the report's statistics for these five stations include mislabeled data for those periods (e.g. "rain" that is actually a temperature). Table 9's valid-day and wet-day counts for TSMS03–05 should be checked with this in mind.
-7. The Konya (courtyard next to a brick wall) and Ankara (nearby hill) siting limits 2-m wind comparisons. Does the report want to state this explicitly? (see [siting.md](siting.md))
-8. **Reference instrument uncertainty:** which instrument models are used at each TSMS reference station (temperature, humidity, pressure, wind, precipitation), and are calibration certificates or intervals available? This is needed for a formal Eₙ comparison (WMO-No. 8 Vol. V Ch. 4) and would sharpen the WMO classification (PF-33).
-9. **Ankara precipitation:** the Ankara reference uses an accumulation (weighing) gauge. How is the 1-min `total_rainfall` derived from it, and are negative/noise increments filtered? Ankara reference totals are several times the 3D-PAWS totals in many months (SF-09).
+8. The Konya (courtyard next to a brick wall) and Ankara (nearby hill) siting limits 2-m wind comparisons. Does the report want to state this explicitly? (see [siting.md](siting.md))
+9. **Reference instrument uncertainty:** which instrument models are used at each TSMS reference station (temperature, humidity, pressure, wind, precipitation), and are calibration certificates or intervals available? This is needed for a formal Eₙ comparison (WMO-No. 8 Vol. V Ch. 4) and would sharpen the WMO classification (PF-33).
+10. **Ankara precipitation:** the Ankara reference uses an accumulation (weighing) gauge. How is the 1-min `total_rainfall` derived from it, and are negative/noise increments filtered? Ankara reference totals are several times the 3D-PAWS totals in many months (SF-09).
+11. **QC details:** are the 61-point windows counted in rows or minutes, and are data gaps filled first? What are the month- and site-specific climatological limits in Table 1? For the RH < 60% rain test, whose humidity is used?
 
 ## Our to-do items
 

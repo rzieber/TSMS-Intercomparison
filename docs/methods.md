@@ -21,9 +21,11 @@ Last updated 2026-09-28.
 
 CHORDS retains only two years of data, so records before late 2024 can't be re-downloaded.
 
-TSMS reference observations were provided by TSMS as a plain-text file. Precipitation at the
-Ankara reference is measured with an accumulation (weighing) gauge; the Konya and Adana
-references and all 3D-PAWS stations use tipping-bucket gauges.
+TSMS reference observations were provided by TSMS as a plain-text file. Reference instruments
+(docs/TSMS Sensors.docx): wind speed Lastem DNA002 (1-min averages; gusts sampled every 6 s),
+wind direction Lastem DNA011, temperature and humidity Rotronic MP101A, pressure Druck RPT200.
+Precipitation at the Ankara reference is measured with an accumulation (weighing) gauge; the
+Konya and Adana references and all 3D-PAWS stations use tipping-bucket gauges.
 
 ## 2. Correction of mislabeled CHORDS columns
 
@@ -123,6 +125,15 @@ The sensitivity run is tracked as potential-fixes PF-31.
 > paired observations only, retaining periods with at least 80% paired minutes.
 
 ## 6. Comparison with WMO requirements
+
+3D-PAWS is positioned as a **baseline-tier** network in the sense of the *Vision for the WMO
+Integrated Global Observing System in 2040* (Ch. 1, p. 7): between the *reference* tier (highest
+performance, calibrated, with uncertainty estimates) and the *comprehensive* tier (little
+management, no QC), a baseline network is managed, quality-controlled and WIGOS-metadata
+compliant (docs/3D-PAWS as a Baseline Tier Observing Network.pdf). Vision 2040 notes that users
+choose observations by tier and application: for the onset of severe weather, "timeliness and
+spatial and temporal resolution are more important than low uncertainty of measurements", while
+long-term trend monitoring may need a reference network.
 
 Two complementary WMO frameworks are used. Neither is a claim that 3D-PAWS is reference-grade.
 Both describe fitness for purpose as a complementary network (WMO-No. 8 Vol. III, Ch. 1, Annex 1.A:
