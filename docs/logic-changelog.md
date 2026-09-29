@@ -9,6 +9,378 @@ effect on results, and anything left open.
 
 ---
 
+## 2026-09-29: Sensor-failure figures; catalog corrections
+
+**Files:** new `scripts/plotter/plot-sensor-failures.py` (one function per failure; writes
+`plots/diagnostics/*/README.md`); `docs/sensor-failures.md`.
+
+**What the figures showed that we had wrong (each checked against the reformatted data):**
+
+| Entry | Before | Corrected |
+|---|---|---|
+| SF-09 | Ankara reference rain inflated, perhaps weighing-gauge noise | A **×10 scaling error from 2023-03-06**. Wet-day ratio vs. TSMS00: 0.97 before, 9.96 after. The reporting step changes from 0.01 to 0.1 mm that day |
+| SF-28 | Konya *reference* missed rain on 12 days | The reverse: **courtyard watering** tips all three Konya 3D-PAWS gauges at ≈ 10:00 UTC at ≈ 27% RH. The reference's 0.6 mm is right. The Step 6 dead-gauge rule flagged the wrong instrument |
+| SF-26 | Suspected, mostly unconfirmed | A **reference anemometer outage**, 10 Aug – 12 Oct 2025 (≈ 100% zeros). The Step 6 calm check missed it, because Adana's 2 m winds are mostly below 1.5 m/s |
+| SF-17 | Sep–Oct 2024 affected `sth_*` only | All TSMS06 sensors were zero, 35,743 minutes |
+| SF-27 | 58,189 minutes | TSMS08 reads 0 in 90–100% of minutes in most months May 2023 – Oct 2024, plus a stuck 0.7 m/s in Jan–Feb 2024 |
+
+Smaller corrections: SF-22 lasted a whole month; SF-23 is 25 runs on 22 days; SF-24 adds a fourth day; SF-25 lasted longer than QC removed.
+
+New entries:
+- SF-29: TSMS02 rain gauge dead during its anemometer outage.
+- SF-30: TSMS01 anemometer reads ≈ 30% of TSMS00.
+
+**Open (decisions pending; each needs a `data/cleaned` re-run):**
+- Correct the Ankara reference rain (÷10 from 2023-03-06) or exclude it.
+- Remove the Adana reference wind speed for 10 Aug – 12 Oct 2025.
+- Remove or flag the Konya watering tips.
+- Bound SF-22, SF-27 and SF-29 as station events.
+
+## 2026-09-29: Rain reported at two wet-day thresholds and with/without flagged days; downstream re-run
+
+**Files:**
+- `scripts/comparison/compare_with_report.py` (new `WET_THRESHOLDS`; precipitation table now long-format).
+- `scripts/error/error-analysis.py` (new WMO row `tipping (flagged days excluded)`; `sum_variables` extended).
+
+**Before (what was wrong):**
+- Rain was compared at the report's 0.2 mm wet-day threshold only, with every day counted.
+- That included days where either gauge is known to be bad: TSMS05's junk months (SF-12), the Ankara
+  reference's inflated totals (SF-09), and dead-gauge days.
+- As a result the TSMS05 rain RMSE was 78 mm/day and its class D.
+
+**Change:**
+- The report comparison gives every combination of wet-day threshold (0.2 mm, 1.0 mm) × days (all,
+  flagged days excluded). A day is excluded when either gauge has any flag that day.
+- The WMO classification adds a flagged-days-excluded rain row per station.
+- The report's own values sit beside the 0.2 mm / all-days rows.
+
+**Effect (regenerated data):**
+- **FAR at 1.0 mm:** 0.04–0.35, vs. 0.14–0.66 at 0.2 mm.
+- **Adana reference:** ≈ 290 days with 0.2–1.0 mm that 3D-PAWS rarely registers (new lead,
+  method-differences P10, TSMS question 15).
+- **WMO rain class, flagged days excluded:**
+
+  | Station | All days | Flagged days excluded |
+  |---|---|---|
+  | TSMS05 | D (RMSE 78.2 mm) | **B** (RMSE 1.26 mm) |
+  | TSMS04 | D | C |
+  | TSMS07 | D | C |
+  | TSMS00–02 (Ankara) | D | D |
+
+  Ankara stays D: its reference over-reads on most wet days (bias −21 to −23 mm/day), not only on the
+  flagged ones (SF-09).
+
+**Downstream re-run on the regenerated `data/cleaned`:**
+- `data/error-analysis` hourly and daily statistics, and `wmo-classification.csv/.xlsx`. The previous
+  files are in `data/error-analysis/before-qc-framework/`.
+- `data/report-comparison/*.csv`.
+- Wind roses in `plots/wind-roses/`.
+
+## 2026-09-29: QC framework stage 6: Step 8 flag columns; statistical test dropped for wind
+
+**`data/cleaned` regenerated 2026-09-29 with Steps 0–8.** The previous files are in
+`data/cleaned/cleaned-backup-09292026_[BEFORE-QC-FRAMEWORK]/`. Every downstream result (error-analysis,
+WMO classification, report comparison, plots) predates this and must be re-run.
+
+**Files:** `scripts/outliers/outlier-removal.py`:
+- New `add_flag_columns()`.
+- Step 6a records which flags were corroborated.
+- Wind removed from Step 5.
+- The header phase list is updated.
+
+**Before (what was wrong):**
+1. **Flags lived only in side files** (`*_flags.csv`, `station_event_flags.csv`). The cleaned data didn't
+   say which kept readings were suspect, so the analysis couldn't report rain with and without flagged
+   periods.
+2. **Statistical test on wind (added in stage 5).** At 11, 21 and 61 min alike it flagged about 1–3% of
+   minutes (Adana), and 90–95% of 3D-PAWS speed flags were gusts the neighbours also saw. So wind was
+   being marked "suspect" for being gusty. Before stage 5, wind had no statistical test at all.
+
+**Change:**
+- Every value column in the `*_final.csv` files gets `<column>_flag`: empty = good, otherwise the
+  `;`-separated reasons (e.g. `tipping_flag`, `temperature_flag`). Codes:
+  - `step`, `hampel`, `z_score`, each with `:corroborated` when Step 6 found a co-located witness;
+  - `stat_untested`;
+  - `rain_low_rh`, `rain_dead_gauge`, `rain_uncorroborated`;
+  - Step 1 flag events as `event:<name>`.
+- Removed readings stay blank, with the reason in `*_outliers.csv`.
+- Wind QC is now the step test, stuck vane, calm check and documented events (decided with the
+  window comparison above).
+
+**Effect (test run, scratch):**
+- Flagged readings per temperature sensor: 2,000–7,300, mostly `hampel:corroborated` (real convection)
+  and `stat_untested`.
+- Pressure: 200–4,200 per sensor, mostly `event:maintenance_visit` and `stat_untested`.
+- Wind: about 1,400 per 3D-PAWS station (the visit day), plus TSMS07's pre-visit anemometer flag
+  (`event:anemometer_binding`, ≈ 590,000 minutes).
+- Rain: the degraded-gauge events flag TSMS00, 01, 06 and 07 from the start of the record to the
+  January 2024 visit (≈ 590,000–740,000 minutes each).
+- TSMS05 rain: 3,378 mm in total, 832 mm without flagged periods (the SF-12 junk months carry
+  `rain_uncorroborated`).
+- Ankara reference rain: 26,715 minutes `rain_uncorroborated` (SF-09).
+
+**Open:**
+- Error-analysis doesn't read the flag columns yet. Next: rain statistics with and without flags
+  (PF-40 wet-day thresholds too).
+- Whether the degraded-gauge flags should cover the whole pre-visit record (qc-framework question 9).
+
+## 2026-09-29: QC framework stage 5: Step 6 neighbour check; Step 5 extended to wind; per-site processing
+
+**Files:** `scripts/outliers/outlier-removal.py`:
+- New constants `NEIGHBOUR_SHARE`, `NEIGHBOUR_LAG`, `NEIGHBOUR_GROUPS`, `CALM_RUN_MINUTES`, `CALM_NEIGHBOUR_SPEED`, `RAIN_EVENT_MM`, `RAIN_DRY_MM`.
+- New functions `wrap180()`, `local_anomaly()`, `completeness_step()`; circular option in `stat_outliers()`.
+- New outlier reasons `neighbour_uncorroborated`, `no_neighbour`, `anemometer_not_responding`, `reference_suspect_calm`.
+- New flag reasons `rain_dead_gauge`, `rain_uncorroborated`.
+- The main loop now stores each station's results after Step 5. Step 6, Step 7 (completeness) and the output run per site with all four instruments in memory.
+
+**Before (what was wrong):**
+1. **No neighbour check.** Only humidity had a site cross-check (Phase 5, HTU only). The step-test and statistical flags had nothing to confirm or clear them.
+2. **Statistical tests skipped wind,** as requested: the 21-min window now applies to every variable except rain. Wind direction uses circular statistics and only minutes with the cups turning.
+3. **Calm and dead gauges were never checked against the neighbours.** TSMS08's anemometer was reading 0 through summer 2023 while both neighbours had wind (SF-27). The Konya reference gauge recorded nothing on days the 3D-PAWS gauges got ≥ 5 mm (SF-28).
+4. **The reference was cleaned three times,** once per station, and written three times.
+
+**Change:**
+- **Rule (agreed 2026-09-29):** a flagged reading is kept only if a co-located instrument shows the same event. Same sign, ≥ 50% of the deviation from its own 21-min median, within ±1 min. Uncorroborated flags are removed, whether contradicted or unverifiable.
+- **Calm:** zero-speed runs ≥ 3 h are removed when ≥ 2 other 3D-PAWS anemometers read a median ≥ 1.5 m/s. The cups start at ≤ 1.2 m/s per SMN's tunnel tests.
+- **Rain:** daily dead-gauge and uncorroborated days are flagged.
+- The reference is processed once per site.
+
+**Wind decided 2026-09-29: flags only** (`NEIGHBOUR_FLAG_ONLY`). Uncorroborated wind flags are kept, because the 10 m and 2 m anemometers can't vouch for each other's gusts. The wind rows below show what removal *would* have done.
+
+**Effect (test run, scratch):**
+
+| Group | Flags corroborated (kept) | Removed |
+|---|---|---|
+| Temperature, working sensors | 95–99% | the rest |
+| HTU21D at TSMS00–02 (bit-switching) | 25–48% | 52–75% |
+| Reference pressure, Ankara | 35 of 432 | 397 |
+| Reference wind speed | 28–53% | 0.7–1.4% of all reference wind |
+| 3D-PAWS wind direction | 31–82% | up to 2% of readings (TSMS00) |
+
+Other changes:
+- Calm minutes removed: TSMS08 58,189 (SF-27); Adana reference 213.
+- Rain flags: TSMS05 976 mm on 4 days (SF-12); Ankara reference 583 mm on 19 days (SF-09).
+- Dead-gauge days: TSMS01 26, TSMS02 21, TSMS08 13, Konya reference 12 (SF-28).
+
+**Open:**
+- Step 8: flag columns (`tipping_flag` etc.).
+
+## 2026-09-29: QC framework stage 4: Step 5 statistical outliers (window, data share, MAD, flag-only)
+
+**Files:** `scripts/outliers/outlier-removal.py`:
+- New `stat_outliers()`, constants `STAT_WINDOW`, `STAT_MIN_SHARE`, `STAT_K`, `STAT_REMOVE`.
+- Phase 6 replaced by Step 5; new flag reasons `hampel`, `z_score`, `stat_untested`.
+
+**Before (what was wrong):**
+1. **The Hampel MAD wasn't the Hampel MAD.** It took each reading's distance from *its own* rolling
+   median, then a rolling median of those distances, so each distance was measured against a
+   different centre. The standard MAD is the median of the window's distances from the *window's*
+   median.
+2. **The "centred" window was 20 wide,** so it ran 10 minutes back and 9 forward.
+3. **A reading was judged with only half its window present** (`min_periods = 10`). A reading in a
+   sparser window was silently skipped, so nothing recorded that it hadn't been tested.
+4. **Readings flagged by both tests were logged twice** (as `z-score_contextual` and
+   `hampel_contextual`), which inflated the removal counts.
+5. **Every statistical flag was removed,** from the reference as well. We measured how many were real:
+   for temperature, **61–95% of flags are corroborated** by a co-located instrument, meaning the same
+   deviation, same sign, same minute:
+
+   | Flagged series | Flags | Corroborated |
+   |---|---|---|
+   | Adana reference | 3,703 | 61% |
+   | Adana MCP9808s | 1,932–2,438 | 90–95% |
+   | Konya reference | 239 | 77% |
+   | Konya MCP9808s | 1,531–1,983 | 69–93% |
+
+   They cluster at 09–11 UTC, with a median deviation of 0.5 °C: midday convection, just above the
+   0.44 °C Hampel cut-off (3 × 1.4826 × the 0.1 °C floor) in otherwise steady windows. So Phase 6 was
+   deleting real weather.
+
+**Change:**
+- A 21-minute centred window (exactly 21 minutes, since Step 0's grid).
+- At least 60% of the window present, else the reading is flagged `stat_untested`.
+- Standard MAD × 1.4826, k = 3, floors unchanged.
+- Each reading logged once (`hampel` takes precedence over `z_score`).
+- **Outcome is a flag** (`STAT_REMOVE = False`); Step 6 will remove the flags no co-located
+  instrument supports. Same columns as before (T, RH, pressure, SLP; not wind or rain).
+
+Effect of the method change alone (same input, flags counted with removal on). The corrected test flags 12–71% fewer readings, depending on the sensor:
+
+| Series | Before | After |
+|---|---|---|
+| Konya reference T | 510 | 242 |
+| TSMS03 `sth_hum` | 17,809 | 8,354 |
+| TSMS07 `htu_hum` | 24,419 | 6,989 |
+
+**Effect on the cleaned data (test run, scratch):** valid readings **kept** that stage 3 had removed:
+- 2,400–6,100 per temperature sensor per station;
+- 10,000–47,000 per humidity sensor, mostly HTU21D;
+- 27–82 for pressure;
+- reference temperature 500 (Konya), 2,873 (Ankara), 4,194 (Adana).
+
+The flags are in the `*_flags.csv` files.
+
+**Open:** Step 6 (neighbour confirmation) is needed before `data/cleaned` is regenerated. Otherwise
+the HTU21D bit-switching remnants that Phase 5 couldn't verify stay in as flags only.
+
+## 2026-09-29: QC framework stage 3: internal consistency, step test, persistence
+
+**Files:** `scripts/outliers/outlier-removal.py`:
+- New constants `RAIN_RH_FLAG`, `STEP_LIMITS`, `PERSISTENCE_MINUTES`, `RH_PERSISTENCE_MAX`, `VANE_MOVING_SPEED`, `FREEZE_MINUTES`, `COLUMN_KIND`.
+- New functions `run_lengths()`, `persistence_mask()`, `frozen_mask()`, `removal_log()`, `flag_log()`.
+- New outlier reasons `logger_zeros`, `persistence`, `logger_frozen`.
+- New flag reasons `rain_low_rh`, `step`, with new outputs `3DPAWS_<station>_<site>_flags.csv` and `TSMS_Reference_<site>_flags.csv`.
+
+Step 3 runs before the HTU filter (Phase 5); Steps 4a and 4b run after it, before the statistical tests (Phase 6).
+
+**Before (what was wrong):**
+1. **No internal-consistency check.** TSMS06's logger zeros (SF-17: every T and RH sensor at exactly
+   0.0 for ≈ 118,000 minutes) passed the range check (0 °C and 0% are "in range") and went into the
+   statistics, worth about −20 °C and −63 %RH against the reference in those minutes.
+2. **Step test only on the HTU21D.** Jumps in any other sensor, or in the reference, weren't looked at.
+3. **No persistence test at all.** Stuck sensors passed every check, because a stuck value is in range
+   and has zero spread, so the Hampel/z-score tests can't see it. Found once the test existed:
+   - a **frozen record at the Ankara reference** on 25 mornings, Jun–Aug 2025 (SF-23);
+   - the Ankara reference humidity stuck at 10% (SF-24) and its vane at 0° (SF-25);
+   - TSMS01's vane at 0.0° (SF-22);
+   - TSMS03 `bmp2_temp` stuck for 3 h;
+   - several short stuck-vane runs.
+
+**Measured before choosing limits** (reformatted data, nulls and range applied):
+- 1-min changes on working sensors: 99.99th percentile ≤ 1.3 °C, 9 %RH, 0.4 hPa, 8 m/s. The HTU21D
+  bit-switching gives changes of up to 77 °C / 74 %RH.
+- **The proposed persistence limits needed two changes:**
+  - **Humidity: "below 100%" → "below 80%".** The Adana reference sits at exactly 99% (its saturation
+    reading) for up to 20 h in fog (103 runs). The Konya reference holds 85–91% for 4–8 h on freezing
+    nights, which is saturation over ice.
+  - **Pressure: 2 h → 3 h.** Genuine plateaus at the turning points of the daily cycle reach 2.6 h
+    (Konya, Adana references).
+- **Wind direction "unchanged 1 h with speed > 0" was too loose.** TSMS08 would have lost 24,362
+  readings at a median speed of 0.7 m/s, where a still vane is plausible. The rule is now a run of
+  identical directions containing ≥ 60 minutes of wind ≥ 1 m/s. The 1 m/s placeholder stands in for the
+  vane's starting threshold until the datasheets arrive (PF-42).
+- **Frozen logger needed "nonzero wind speed".** Without it, a calm, foggy night at the Adana
+  reference (68 min at 99%, 0 m/s, 12.4 °C) would count as frozen. The 25 Ankara events all repeat
+  speeds of 1.4–10.2 m/s.
+
+**Change:**
+- **Step 3.**
+  - Logger zeros removed: exact 0 %RH together with exact 0.0 °C in the same minute; all exact zeros in that minute's T/RH columns.
+  - Rain with RH < 60% flagged (each instrument's own humidity).
+- **Step 4a.** Step test at the TSMS Table 1 limits (2 °C, 15 %RH, 0.5 hPa, 8 m/s, 5 mm) on every variable except wind direction and SLP. Flag only; both ends of a jump are flagged.
+- **Step 4b.**
+  - Persistence with the limits above.
+  - Frozen logger: T, RH, pressure and a nonzero wind speed all unchanged ≥ 60 min, every column removed.
+  - Applied to the 3D-PAWS stations and the reference.
+
+**Effect (test run, output to scratch; `data/cleaned` not yet regenerated).** Valid readings removed
+vs. the stage 2 output, including knock-on Phase 6/7 changes:
+
+| File | Removed |
+|---|---|
+| TSMS06 | `sth_temp` 97,829, `sth_hum` 97,748, `bmp2_temp` 64,319, `mcp9808` 62,603 (SF-17); `wind_dir` 1,705 |
+| TSMS01 | `wind_dir` 8,547 (SF-22) |
+| TSMS08 | `wind_dir` 16,150 |
+| TSMS03 | `wind_dir` 2,875; `bmp2_temp` 187 |
+| TSMS02 | `wind_dir` 1,598 |
+| TSMS07 | `wind_dir` 317 |
+| Ankara reference | ≈ 5,100 per variable (frozen record, SF-23); humidity 9,641 (incl. SF-24); `avg_wind_dir` 7,785 (incl. SF-25) |
+| TSMS00, 04, 05, Konya reference, Adana reference | none |
+
+Flags (kept):
+- Rain with RH < 60%: reference 40–248 mm per site; 3D-PAWS 52–253 mm per station, plus TSMS05's 2,312 mm of SF-12 junk.
+- Step flags: dozens to hundreds per sensor, excluding the HTU21D. The HTU21D gets thousands at TSMS00–02, from bit-switching the Phase 5 filter couldn't verify.
+
+**Open:**
+- Step 6 must confirm or clear the step flags and judge long zero-speed runs (SF-26, Adana reference 2025).
+- Step 8 turns the flags into columns (`tipping_flag`).
+- The `VANE_MOVING_SPEED` and step limits should come from the datasheets (PF-42).
+
+## 2026-09-29: QC framework stage 2: Step 1 "Metadata & diagnostics" from a station-events table
+
+**Files:** `scripts/outliers/outlier-removal.py` (new `metadata_step()`, `event_mask()`,
+`event_columns()`; `sensor_failures` dict and `failure_mask()` removed; the hard-coded TSMS04 and
+TSMS08 rain removals deleted from Phase 4; outlier reason `sensor_failure` → `station_event`, logged
+as `station_event:<event>`; new output `station_event_flags.csv`), new
+[station-events.csv](station-events.csv). Sources: `docs/Maintenance-Logs/` (Jan 2024 visits) and
+the evaluation plan.
+
+**Before (what was wrong):**
+1. **The maintenance logs weren't used at all.** Nothing in the pipeline knew about the visits,
+   the sensor swaps, or the conditions the technicians found.
+2. **TSMS02's anemometer was unplugged for ≈ 9.5 months and its zeros were kept as calm** (new
+   SF-20). From 2023-03-31 12:17 to 2024-01-11 10:02, all 407,009 `wind_speed` readings are exactly
+   0 while the Ankara reference median is 1.5 m/s. 0 m/s passes the range check and wind isn't
+   tested statistically, so every zero went into the TSMS02 wind statistics as real calm.
+3. **Documented removals were scattered:** two rain blocks with hard-coded dates inside Phase 4,
+   plus an (empty) `sensor_failures` dict at the top of the script. You had to read code to learn
+   what was excluded and why.
+4. **No way to mark a period suspect without deleting it.** Degraded but not failed conditions
+   (a stuck bucket, pebbles in a funnel) could only be ignored or removed.
+
+**Change (Step 1, one job: was the system known to be working?):** runs after Step 0, before the
+range check. Each row of `station-events.csv` is `remove` (blank and log), `flag` (keep; list the
+period in `station_event_flags.csv` for Step 8's flag columns) or `note` (print only). A blank start
+or end means the start or end of the record. The pre-pass that builds site humidity for the HTU
+cross-check uses the same `remove` rows. Battery diagnostics aren't used: the RPi stations
+(TSMS00–05) don't log them, and the Particle stations' battery columns are constant 0 or absent.
+
+**Effect (test run, output to scratch; `data/cleaned` not yet regenerated):**
+- TSMS02 `wind_speed`: 407,009 readings removed (SF-20); nothing else in TSMS02 changes.
+- TSMS04 and TSMS08 rain: identical to before (1,551,944 and 1,509,532 valid readings; 850.0 and
+  1,052.6 mm), confirming the moved rules behave the same.
+- 14 flagged periods: the nine visit days (all variables), four degraded rain gauges before the
+  visits (TSMS00, 01, 06, 07; ≈ 600,000–730,000 readings each), and the TSMS07 anemometer (SF-21).
+- No other values change.
+
+**Correction made during testing:** I first set the TSMS02 outage start to 2023-03-15 00:00, taken
+from a count on already-cleaned data, where Phase 7 had blanked 2023-03-15. The reformatted data
+shows the anemometer still working that morning (659 readings to 11:00 that track the reference,
+r = 0.62). The start is now 2023-03-31 12:17, the first reading after the record gap.
+
+**Open:** the flagged rain periods run from the start of the record because the logs only
+describe the visit day. Step 6 (neighbour check) should bound when each problem began. TSMS01's
+near-zero rain since 2023 (SF-16) may be its stuck bucket.
+
+## 2026-09-29: QC framework stage 1: Step 0 "Structure" replaces Phases 1–2
+
+**Files:** `scripts/outliers/outlier-removal.py` (new `structure_step()`, `NULL_MARKER_CEILING`,
+`LAYOUT_RANGES`; old Phase 1 "nulls" and Phase 2 "time resets" removed; outlier reasons renamed
+`null` → `null_marker`, `timestamp_reset` → `duplicate_timestamp`; new output
+`structure_layout_warnings.csv`). Framework: [qc-framework.md](qc-framework.md).
+
+**Before (what was wrong):**
+1. **No regular time grid.** Missing minutes had no row, so rolling windows counted rows, not
+   minutes. TSMS03 had rows for 91% of its minutes, with 46 gaps over an hour and the longest 316 h.
+   A "20-point" window could span days. The gap infill (`func.fill_empty_rows`) ran only in the TSMS
+   reformatter, and cleaning dropped rows afterwards without refilling them.
+2. **The first row of every file was dropped** (PF-06): its time difference is `NaT`, and
+   `NaT > 0` is False.
+3. **"Timestamp resets" were really duplicates.** The data was sorted first, so only duplicate
+   minutes remained "out of order", and which copy was kept depended on an unstable sort.
+4. **Only `-999.99` was treated as a null marker** (PF-05). The data also uses `-999.9`, `-999.0`,
+   `-1000.0` (3D-PAWS) and `-9999.0` (TSMS), plus ≈ 320,000 `bmp2_slp` values near −1005: SLPs
+   computed from a pressure marker, because `func.calc_slp` masks only `-999.99`. These were removed
+   later by the range check but logged as `threshold`.
+5. **Every blank cell was logged as a `-999.99` null,** whether or not it had ever held that value.
+
+**Change (Step 0, one job: is the record well-formed?):** parse and stable-sort timestamps; drop
+duplicate minutes keeping the first in file order (logged); reindex onto a complete 1-min grid with
+empty rows for missing minutes; turn any value ≤ −990 into missing, logged with its original value;
+and a **column-layout guard** that writes a warning, without changing data, for any month whose
+median is implausible for its column.
+
+**Effect (test run, output to scratch; `data/cleaned` not yet regenerated, see PF-35):**
+- Every file is now on a full grid (e.g. TSMS02 1,450,888 → 1,731,519 rows).
+- The first row is kept everywhere.
+- Valid-value counts change by tens to ≈ 1,400 per column (out of ≈ 1.5 M). The differences come
+  from the Phase 6 20-row windows now spanning exactly 20 minutes near gaps.
+- Null markers are logged with their true value (e.g. 720,557 at TSMS03).
+- **The layout guard flagged 26 station-months, all sensor faults rather than column mix-ups:**
+  TSMS06 pressure 0 hPa (Oct 2024, Mar–May 2025; the SF-17 logger zeros) and ≈ 670 hPa from Jun
+  2025 (SF-14), and **TSMS07 pressure stuck at ≈ 500.1 hPa, May–Oct 2024 (new, SF-19)**. The Phase 3
+  range check (870–1,084 hPa) already removes these values.
+
 ## 2026-09-28: WMO classification replaces "Reliability" (PF-15)
 
 **Files:** `scripts/error/error-analysis.py` (Reliability section and `wmo_thresholds` removed; `_paired()`

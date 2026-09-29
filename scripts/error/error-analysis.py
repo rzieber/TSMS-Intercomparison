@@ -151,7 +151,7 @@ Pair each 3D-PAWS variable with its reference variable at MINUTE level, then agg
 """
 PAIRED_COMPLETENESS = 0.8
 minutes_per_period = {'10MIN': 10, 'H': 60, 'D': 1440}
-sum_variables = {'total_rainfall', 'tipping'}
+sum_variables = {'total_rainfall', 'tipping', 'total_rainfall_nf', 'tipping_nf'}
 _pair_cache = {}
 _wind_availability_cache = {}
 
@@ -567,9 +567,33 @@ for key in paws_dfs:
                 row['Siting note'] = SITING_LIMITED_WIND.get(key, '') if measurand.startswith('wind') else ''
                 wmo_rows.append(row)
 
+        # Rain again with flagged days excluded: a day is dropped when either gauge has any QC flag that day
+        # (tipping_flag / total_rainfall_flag, docs/qc-framework.md Step 8), e.g. SF-09 Ankara reference, SF-12 TSMS05.
+        day_t = pd.to_datetime(tsms_df['date']).dt.floor('D'); day_p = pd.to_datetime(paws_df['date']).dt.floor('D')
+        flagged = set(day_t[tsms_df['total_rainfall_flag'].notna().to_numpy()]) | set(day_p[paws_df['tipping_flag'].notna().to_numpy()])
+        t_nf = tsms_df.assign(total_rainfall_nf=tsms_df['total_rainfall'].where(~day_t.isin(flagged)))
+        p_nf = paws_df.assign(tipping_nf=paws_df['tipping'].where(~day_p.isin(flagged)))
+        freq = WMO_AVERAGING['precip']
+        d, ref = _differences(stn_name, t_nf, p_nf, 'total_rainfall_nf', 'tipping_nf', 'precip', freq)
+        row = {'Station': stn_name, 'Site': key, 'Variable': 'tipping (flagged days excluded)', 'Measurand': 'precip',
+               'Averaging': AVERAGING_LABEL[freq], 'N': len(d)}
+        if len(d):
+            absd = np.abs(d)
+            row.update({'Bias': round(d.mean(), 2), 'RMSE (k=1)': round(np.sqrt((d ** 2).mean()), 2),
+                        'U95 (95th pct |diff|)': round(np.percentile(absd, 95), 2)})
+            achieved = 'D'
+            for cls, tol in zip('ABC', ANNEX_1G['precip']):
+                within = (absd <= tol(ref)).mean()
+                row[f'% within Class {cls}'] = round(100 * within, 1)
+                if achieved == 'D' and within >= 0.95: achieved = cls
+            row['Annex 1.G class'] = achieved
+            row['% within Annex 1.A required'] = round(100 * (absd <= ANNEX_1A_REQUIRED['precip'](ref)).mean(), 1)
+            row['% within Annex 1.A achievable'] = round(100 * (absd <= ANNEX_1A_ACHIEVABLE['precip'](ref)).mean(), 1)
+        wmo_rows.append(row)
+
 df_wmo = pd.DataFrame(wmo_rows)
 df_wmo['Station'] = pd.Categorical(df_wmo['Station'], categories=station_order, ordered=True)
-df_wmo['Variable'] = pd.Categorical(df_wmo['Variable'], categories=variable_order, ordered=True)
+df_wmo['Variable'] = pd.Categorical(df_wmo['Variable'], categories=variable_order + ['tipping (flagged days excluded)'], ordered=True)
 df_wmo = df_wmo.sort_values(['Station', 'Variable']).reset_index(drop=True)
 df_wmo.to_csv(output / 'wmo-classification.csv', index=False)
 

@@ -7,7 +7,9 @@ Side-by-side comparison of our statistics with the TSMS draft report
       after the Jan 2024 upgrade -- CHORDS labels both "HTU21D_RH"); pressure: BMP280 station pressure
     - wind speed: TSMS adjusted to 2 m (Hellmann), all paired minutes
     - wind direction: minimum circular separation, minutes where both anemometers read > 0
-    - precipitation: daily totals on >= 80%-complete days, wet day >= 0.2 mm, contingency table
+    - precipitation: daily totals on >= 80%-complete days, contingency table, for wet-day thresholds of 0.2 mm (report)
+      and 1.0 mm (ETCCDI R1mm), each with all days and with flagged days excluded (a day is excluded when either
+      gauge has any QC flag that day: tipping_flag / total_rainfall_flag, docs/qc-framework.md Step 8)
 Uses data/cleaned (our QC). Writes CSV tables to data/report-comparison/.
 Report values are transcribed from the report's Tables 4, 6, 7, 8 and 9.
 ==========================================================================================
@@ -60,8 +62,14 @@ report_precip = {  # paired days, hits, misses, false alarms, correct negatives,
     "TSMS08": (1047, 63, 18, 108, 858, 0.778, 0.632, 0.333)}
 
 
+WET_THRESHOLDS = [0.2, 1.0]    # mm/day: report parity, ETCCDI R1mm (docs/potential-fixes.md PF-40)
+
+
 def load(path, cols):
-    d = pd.read_csv(path, usecols=['date'] + cols, parse_dates=['date'])
+    d = pd.read_csv(path, usecols=['date'] + cols, parse_dates=['date'], keep_default_na=False,
+                    na_values={c: [''] for c in cols if not c.endswith('_flag')})
+    for c in cols:
+        if not c.endswith('_flag'): d[c] = pd.to_numeric(d[c], errors='coerce')
     return d.drop_duplicates('date').set_index('date').loc[START:END]
 
 
@@ -74,11 +82,12 @@ def stats(t, p):
 rows, wd_rows, pr_rows = [], [], []
 for site, stations in sites.items():
     ref = load(cleaned / f"TSMS_Reference_{site}_final.csv",
-               ['temperature', 'humidity', 'actual_pressure', 'avg_wind_speed', 'avg_wind_dir', 'total_rainfall'])
+               ['temperature', 'humidity', 'actual_pressure', 'avg_wind_speed', 'avg_wind_dir', 'total_rainfall',
+                'total_rainfall_flag'])
     ref['ws2'] = ref['avg_wind_speed'] * (2 / 10) ** hellman[site]
     for stn in stations:
         paws = load(cleaned / f"3DPAWS_{stn}_{site}_final.csv",
-                    ['mcp9808', 'htu_hum', 'sth_hum', 'bmp2_pres', 'wind_speed', 'wind_dir', 'tipping'])
+                    ['mcp9808', 'htu_hum', 'sth_hum', 'bmp2_pres', 'wind_speed', 'wind_dir', 'tipping', 'tipping_flag'])
         paws['hum'] = paws['sth_hum'].combine_first(paws['htu_hum'])
         m = ref.join(paws, how='inner')
         for var, rc, pc in [("temperature", "temperature", "mcp9808"), ("humidity", "humidity", "hum"),
@@ -102,21 +111,30 @@ for site, stations in sites.items():
                         '% ≤45 (ours)': 100 * (a <= 45).mean(), '% ≤45 (report)': rw[4],
                         '% ≤90 (ours)': 100 * (a <= 90).mean(), '% ≤90 (report)': rw[5]})
 
-        # precipitation: daily totals on >= 80%-complete days for each gauge, wet >= 0.2 mm
+        # precipitation: daily totals on >= 80%-complete days for each gauge
         def daily(s):
             g = s.resample('D').agg(['sum', 'count'])
             return g['sum'].where(g['count'] >= 1152)
+        def flagged_day(f):
+            return (f.astype(str).str.len() > 0).resample('D').max().astype(bool)
         dd = pd.DataFrame({'ref': daily(ref['total_rainfall']), 'paws': daily(paws['tipping'])}).dropna()
-        rw_, pw_ = dd['ref'] >= 0.2, dd['paws'] >= 0.2
-        h, mi, fa, cn = (rw_ & pw_).sum(), (rw_ & ~pw_).sum(), (~rw_ & pw_).sum(), (~rw_ & ~pw_).sum()
+        dd['flag'] = (flagged_day(ref['total_rainfall_flag']).reindex(dd.index, fill_value=False) |
+                      flagged_day(paws['tipping_flag']).reindex(dd.index, fill_value=False))
         rp = report_precip[stn]
-        pr_rows.append({'Site': site, 'Station': stn, 'Paired days (ours)': len(dd), 'Paired days (report)': rp[0],
-                        'Ref wet days (ours)': h + mi, 'Ref wet days (report)': rp[1] + rp[2],
-                        '3D-PAWS wet days (ours)': h + fa, '3D-PAWS wet days (report)': rp[1] + rp[3],
-                        'POD (ours)': h / (h + mi) if h + mi else np.nan, 'POD (report)': rp[5],
-                        'FAR (ours)': fa / (h + fa) if h + fa else np.nan, 'FAR (report)': rp[6],
-                        'CSI (ours)': h / (h + mi + fa) if h + mi + fa else np.nan, 'CSI (report)': rp[7],
-                        'Ref total mm (ours)': dd['ref'].sum(), '3D-PAWS total mm (ours)': dd['paws'].sum()})
+        for subset, days in [("all days", dd), ("flagged days excluded", dd[~dd['flag']])]:
+            for thr in WET_THRESHOLDS:
+                rw_, pw_ = days['ref'] >= thr, days['paws'] >= thr
+                h, mi, fa, cn = (rw_ & pw_).sum(), (rw_ & ~pw_).sum(), (~rw_ & pw_).sum(), (~rw_ & ~pw_).sum()
+                parity = (thr == 0.2 and subset == "all days")     # the report's definition: compare with Table 9
+                pr_rows.append({'Site': site, 'Station': stn, 'Wet threshold (mm)': thr, 'Days': subset,
+                                'Paired days (ours)': len(days), 'Paired days (report)': rp[0] if parity else np.nan,
+                                'Ref wet days (ours)': h + mi, 'Ref wet days (report)': rp[1] + rp[2] if parity else np.nan,
+                                '3D-PAWS wet days (ours)': h + fa, '3D-PAWS wet days (report)': rp[1] + rp[3] if parity else np.nan,
+                                'Hits': h, 'Misses': mi, 'False alarms': fa, 'Correct negatives': cn,
+                                'POD (ours)': h / (h + mi) if h + mi else np.nan, 'POD (report)': rp[5] if parity else np.nan,
+                                'FAR (ours)': fa / (h + fa) if h + fa else np.nan, 'FAR (report)': rp[6] if parity else np.nan,
+                                'CSI (ours)': h / (h + mi + fa) if h + mi + fa else np.nan, 'CSI (report)': rp[7] if parity else np.nan,
+                                'Ref total mm (ours)': days['ref'].sum(), '3D-PAWS total mm (ours)': days['paws'].sum()})
 
 pd.DataFrame(rows).round(3).to_csv(out / "continuous-variables.csv", index=False)
 pd.DataFrame(wd_rows).round(2).to_csv(out / "wind-direction.csv", index=False)

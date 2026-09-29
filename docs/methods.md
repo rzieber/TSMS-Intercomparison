@@ -27,6 +27,27 @@ wind direction Lastem DNA011, temperature and humidity Rotronic MP101A, pressure
 Precipitation at the Ankara reference is measured with an accumulation (weighing) gauge; the
 Konya and Adana references and all 3D-PAWS stations use tipping-bucket gauges.
 
+3D-PAWS sensors in this study (datasheets in `docs/datasheets/`; bare-component values, before
+shield, siting, calibration and maintenance effects):
+
+| Sensor | Variable | Datasheet accuracy | Other specs | Stations / period |
+|---|---|---|---|---|
+| BMP280 | Pressure, temperature | ±1.0 hPa absolute (0–65 °C), ±1.7 hPa (−20–0 °C); relative ±0.12 hPa; T ±1.0 °C (0–65 °C) | Drift ±1.0 hPa/yr; solder drift −0.5 to +2 hPa. Bosch min/max = ±3σ. T channel reads the die (cross-check only) | All nine, whole record |
+| HTU21D | Humidity, temperature | ±2 %RH typ (20–80 %RH, 25 °C); T ±0.3 °C typ | Hysteresis ±1 %RH; drift 0.5 %RH/yr; τ63 5 s (10 s max) | TSMS00–08 to Jan 2024; kept at TSMS00, 01, 04, 07 |
+| SHT31D | Humidity, temperature | ±2 %RH typ; T ±0.3 °C typ (10–55 °C) | Hysteresis 0.8 %RH; drift < 0.25 %RH/yr, T < 0.03 °C/yr; τ63 8 s; long exposure > 80 %RH can offset RH (+3 %RH after 60 h), recovering | TSMS02, 03, 05, 06, 08 from Jan 2024 |
+| MCP9808 | Temperature | ±0.25 °C typ (−40–125 °C), ±0.5 °C max (−20–100 °C) | Resolution 0.0625 °C | All nine |
+| Cups + SS451A Hall switch | Wind speed | No component spec. **SMN Argentina wind tunnel (6 units, 5–30 m/s):** linear (R² ≥ 0.998) but reads **10–13% low** vs. a Pitot reference; best fit factor 2.90 + 0.40 m/s offset vs. the firmware's 2.64 | 2 pulses/rev, calibration factor 2.64. **Start-up ≤ 1.2 m/s** (5 of 6 units responded at 1.0 m/s, one at 1.2 m/s; new units, field-aged not tested). RPi and Particle agree (0.055 m/s) | All nine |
+| Vane + AS5600 magnetic encoder | Wind direction | No component spec (set by alignment and calibration) | 12-bit (0.09°); no starting threshold stated | All nine |
+| Tipping bucket + SS451A | Rain | Single-rate calibration; < 5% error at 0.1–30 mm/h (2016–17 lab test) | 0.2 mm/tip | All nine |
+
+Sources: BMP280 from the Bosch datasheet (BST-BMP280-DS001-26, as summarized in the 3D-PAWS sensor
+specifications doc; the repo PDF is encrypted); SHT3x from the repo copy (v0.93, May 2015; the 2022 v7
+datasheet gives ±0.2 °C); others from the repo PDFs and the 3D-PAWS manual. **Wind and rain have no
+uncertainty spec** beyond the SMN tunnel tests (`docs/datasheets/3DPAWS_anemometer_test_report_EN.pdf`),
+so the WMO class for those rests on the field comparison. The vane's starting threshold is untested. The 3D-PAWS team's uncertainty budgets (Annex 1.G Table 2 method) cover the **current** build
+(SHT45, BMP581), not the sensors used here; a study-sensor budget is still to do (PF-42). The TSMS
+reference sensor specifications are being compiled.
+
 ## 2. Correction of mislabeled CHORDS columns
 
 In the January 2024 – November 2025 CHORDS files for stations TSMS02, TSMS03, TSMS04, TSMS05
@@ -168,6 +189,19 @@ high classes there are an artifact.
 > station siting and are reported for completeness only.
 
 ## 7. Other documented exclusions and limitations
+
+- **Reference data quality:** the QC is applied to the TSMS reference as well, using only the
+  reference's own record (it is never judged against 3D-PAWS in these steps). Persistence checks
+  removed a frozen record at the Ankara reference on 25 mornings in summer 2025 (SF-23) and two
+  stuck sensors there (SF-24, SF-25). These are reported to TSMS.
+- **Maintenance metadata (QC Step 1):** events from the January 2024 site visits (Konya 12 Jan,
+  Adana 15 Jan, Ankara 17 Jan; logs in `docs/Maintenance-Logs/`) and the evaluation plan are
+  encoded in [station-events.csv](station-events.csv). Log station numbers map to IDs as: Ankara
+  0/1/2 = TSMS00/01/02, Konya 1/2/3 = TSMS03/04/05, Adana 1/2/3 = TSMS06/07/08. One period is
+  removed: TSMS02 wind speed, 31 Mar 2023 – 11 Jan 2024 (anemometer disconnected; SF-20).
+  Degraded rain gauges and the TSMS07 anemometer before the visits are flagged, not removed
+  (SF-21). HTU21D → SHT31D upgrades (TSMS02, 03, 05, 06, 08) mark where sensor statistics change
+  instrument. TSMS00, 01, 04, 07 kept their original sensors as the 3D-PAWS benchmarks.
 
 - **Sensor and data issues:** see [sensor-failures.md](sensor-failures.md).
 - **Siting:** 2-m wind at Konya (courtyard next to a brick wall) and Ankara (nearby hill) is not

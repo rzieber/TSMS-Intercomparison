@@ -1,0 +1,37 @@
+station,start,end,variables,action,event,catalog_id,source,notes
+TSMS00,2024-01-17 00:00,2024-01-17 23:59,all,flag,maintenance_visit,,Maintenance log Ankara 2024-01-17,Site visit: rain gauges dismantled and cleaned; shields dismantled and cleaned; RPi software updated
+TSMS01,2024-01-17 00:00,2024-01-17 23:59,all,flag,maintenance_visit,,Maintenance log Ankara 2024-01-17,Site visit: rain gauges dismantled and cleaned; shields dismantled and cleaned; RPi software updated
+TSMS02,2024-01-17 00:00,2024-01-17 23:59,all,flag,maintenance_visit,,Maintenance log Ankara 2024-01-17,Site visit: sensor harness replaced; HTU21D -> SHT31D (~13 UTC per evaluation plan); anemometer base replaced
+TSMS03,2024-01-12 00:00,2024-01-12 23:59,all,flag,maintenance_visit,,Maintenance log Konya 2024-01-12,Site visit (log station 1): sensor harness replaced; HTU21D -> SHT31D; router swapped
+TSMS04,2024-01-12 00:00,2024-01-12 23:59,all,flag,maintenance_visit,,Maintenance log Konya 2024-01-12,Site visit (log station 2): cleaning only; original sensors kept as benchmark
+TSMS05,2024-01-12 00:00,2024-01-12 23:59,all,flag,maintenance_visit,,Maintenance log Konya 2024-01-12,Site visit (log station 3): sensor harness replaced; HTU21D -> SHT31D
+TSMS06,2024-01-15 00:00,2024-01-15 23:59,all,flag,maintenance_visit,,Maintenance log Adana 2024-01-15,Site visit (log station 1): sensor harness replaced; HTU21D -> SHT31D
+TSMS07,2024-01-15 00:00,2024-01-15 23:59,all,flag,maintenance_visit,,Maintenance log Adana 2024-01-15,Site visit (log station 2): cleaning only; anemometer rotor replaced (corroded bearing)
+TSMS08,2024-01-15 00:00,2024-01-15 23:59,all,flag,maintenance_visit,,Maintenance log Adana 2024-01-15,Site visit (log station 3): sensor harness replaced; HTU21D -> SHT31D
+TSMS02,2024-01-17 13:00,,bmp2_temp htu_temp sth_temp mcp9808 htu_hum sth_hum bmp2_pres bmp2_slp,note,sensor_change,,Maintenance log Ankara; evaluation plan,New T/P/RH sensors; HTU21D replaced by SHT31D. Split statistics before/after (PF-17)
+TSMS03,2024-01-12 00:00,,bmp2_temp htu_temp sth_temp mcp9808 htu_hum sth_hum bmp2_pres bmp2_slp,note,sensor_change,,Maintenance log Konya; evaluation plan,New T/P/RH sensors; HTU21D replaced by SHT31D. Split statistics before/after (PF-17)
+TSMS05,2024-01-12 00:00,,bmp2_temp htu_temp sth_temp mcp9808 htu_hum sth_hum bmp2_pres bmp2_slp,note,sensor_change,,Maintenance log Konya; evaluation plan,New T/P/RH sensors; HTU21D replaced by SHT31D. Split statistics before/after (PF-17)
+TSMS06,2024-01-15 00:00,,bmp2_temp htu_temp sth_temp mcp9808 htu_hum sth_hum bmp2_pres bmp2_slp,note,sensor_change,,Maintenance log Adana; evaluation plan,New T/P/RH sensors; HTU21D replaced by SHT31D. Split statistics before/after (PF-17)
+TSMS08,2024-01-15 00:00,,bmp2_temp htu_temp sth_temp mcp9808 htu_hum sth_hum bmp2_pres bmp2_slp,note,sensor_change,,Maintenance log Adana; evaluation plan,New T/P/RH sensors; HTU21D replaced by SHT31D. Split statistics before/after (PF-17)
+TSMS02,2023-03-31 12:17,2024-01-11 10:02,wind_speed,remove,anemometer_disconnected,SF-20,Maintenance log Ankara 2024-01-17; data,"Anemometer short circuit was tripping the RPi, so it was disconnected. Data: last working reading 2023-03-15 11:00, record gap to 2023-03-31 12:17, then wind_speed exactly 0 for all 407,009 readings until 2024-01-11 10:02 (first nonzero 10:03) while the reference median was 1.5 m/s. Vane kept working"
+TSMS00,,2024-01-17 00:00,tipping,flag,rain_gauge_degraded,SF-21,Maintenance log Ankara 2024-01-17,"Gauge significantly off level and may have been stuck on one side; dirty. Start unknown (record start used)"
+TSMS01,,2024-01-17 00:00,tipping,flag,rain_gauge_degraded,SF-21,Maintenance log Ankara 2024-01-17,"One side of the bucket much dirtier than the other, suggesting it was stuck; level slightly off. Start unknown"
+TSMS06,,2024-01-15 00:00,tipping,flag,rain_gauge_degraded,SF-21,Maintenance log Adana 2024-01-15,"Two ~5 mm pebbles stuck in the funnel orifice below the vertical screen (possible reduced catch). Start unknown"
+TSMS07,,2024-01-15 00:00,tipping,flag,rain_gauge_degraded,SF-21,Maintenance log Adana 2024-01-15,"Horizontal and vertical screens missing; bucket particularly dirty. Start unknown"
+TSMS07,,2024-01-15 00:00,wind_speed,flag,anemometer_binding,SF-21,Maintenance log Adana 2024-01-15,"Anemometer binding (corroded bearing; possible low speeds, raised starting threshold). Rotor replaced at visit. Start unknown"
+TSMS04,,2022-08-31 23:59,tipping,remove,fabrication_test_tips,,Previously hard-coded in outlier-removal.py Phase 4,Erroneously high values: test tips during fabrication
+TSMS08,2023-04-08 00:00,2023-04-14 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,Erroneously high values: possibly faulty connector or manual manipulation of the gauge by the public
+TSMS08,2023-05-15 00:00,2023-05-17 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,As above
+TSMS08,2024-02-08 00:00,2024-02-11 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,As above
+TSMS08,2024-02-15 00:00,2024-02-20 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,As above
+TSMS08,2024-03-07 00:00,2024-03-07 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,As above
+TSMS08,2024-03-09 00:00,2024-03-10 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,As above
+TSMS08,2024-03-21 00:00,2024-03-21 23:59,tipping,remove,rain_connector_or_tampering,,Previously hard-coded in outlier-removal.py Phase 4,As above
+TSMS08,2024-01-15 00:00,,wind_speed,note,anemometer_replaced,,Evaluation plan (Jan 2024),"Cup anemometer mechanism replaced per the evaluation plan; the Adana maintenance log mentions only station 2 (TSMS07). Condition before replacement not described"
+TSMS05,,2024-01-12 00:00,bmp2_temp htu_temp mcp9808,note,shield_assembly_error,,Maintenance log Konya 2024-01-12,"Radiation shield had a sixth open leaf in place of the closed leaf since assembly. No detectable effect: pre-visit offset matches TSMS03/04 (median +0.35 vs. +0.35 / +0.16 °C)"
+TSMS03,,2024-01-12 00:00,all,note,connectivity_issues,,Maintenance log Konya 2024-01-12,Router needed regular reboots to keep Wi-Fi links (data gaps rather than bad values); router replaced at visit
+TSMS04,,2024-01-12 00:00,all,note,connectivity_issues,,Maintenance log Konya 2024-01-12,As above
+TSMS05,,2024-01-12 00:00,all,note,connectivity_issues,,Maintenance log Konya 2024-01-12,As above
+TSMS00,2024-01-17 00:00,,all,note,software_update,,Maintenance log Ankara 2024-01-17,RPi software upgraded to the latest version (all three Ankara stations). Only TSMS02 shows the SF-10 layout change (2024-03-11)
+TSMS01,2024-01-17 00:00,,all,note,software_update,,Maintenance log Ankara 2024-01-17,As above
+TSMS02,2024-01-17 00:00,,all,note,software_update,,Maintenance log Ankara 2024-01-17,As above
