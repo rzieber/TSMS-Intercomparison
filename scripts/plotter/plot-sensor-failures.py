@@ -563,11 +563,9 @@ def fig_sf25():
 
 
 def fig_sf28():
-    """SF-28: Konya reference 0 mm on days >= 2 3D-PAWS gauges record >= 5 mm (Jun-Sep 2023)."""
+    """SF-28: courtyard watering tips the Konya 3D-PAWS gauges on dry days (Jul-Aug 2023); the reference is right."""
     a, b = "2023-06-01", "2023-09-30 23:59"
-    fl = qc_log("TSMS_Reference_Konya", "flags")
-    fdays = pd.DatetimeIndex(fl.loc[fl.flag_type == "rain_dead_gauge", "date"].dt.normalize().unique())
-    fdays = fdays[(fdays >= a) & (fdays <= b)]
+    wat0, wat1 = pd.Timestamp("2023-07-01"), pd.Timestamp("2023-09-03")   # courtyard_watering event (station-events.csv)
     r = reference("Konya", a, b)
     series = [("ref", "Konya reference", r["total_rainfall"])] + \
              [(sid, sid, station(sid, a, b)["tipping"]) for sid in SITES["Konya"]]
@@ -578,8 +576,8 @@ def fig_sf28():
     for i, (key, lab, s) in enumerate(series):
         ax = fig.add_subplot(gs[i, 0], sharex=first, sharey=first)
         first = first or ax
-        for j, d in enumerate(fdays):
-            shade(ax, d, d + pd.Timedelta("1D"), "flagged rain_dead_gauge day" if (i == 0 and j == 0) else None)
+        if i > 0:
+            shade(ax, wat0, wat1, "flagged courtyard_watering" if i == 1 else None)
         d = daily(s, "sum", 0.25)
         ax.bar(d.index + pd.Timedelta("12h"), d.values, width=0.8, color=COLOR[key], lw=0, label=lab)
         ax.set_ylim(0, top * 1.1)
@@ -607,8 +605,95 @@ def fig_sf28():
     ax.set_ylabel("Reference RH at tip minute (%)")
     ax.set_title("3D-PAWS tips, 5 Jul – 31 Aug 2023", fontsize=9)
     legend(ax, ncol=3, loc="upper left")
-    fig.suptitle("SF-28 · Konya reference · 0 mm on days the 3D-PAWS gauges tip", fontweight="bold")
-    return save(fig, OUT_REF, "SF-28_Konya_reference_dead_gauge_days.png")
+    fig.suptitle("SF-28 · Konya 3D-PAWS gauges · courtyard watering tips the buckets on dry days", fontweight="bold")
+    return save(fig, OUT_3DP, "SF-28_Konya_3DPAWS_courtyard_watering.png")
+
+
+def fig_sf29():
+    """SF-29: TSMS02 rain gauge records (almost) nothing during its anemometer outage."""
+    a, b = "2023-01-01", "2024-03-31 23:59"
+    o0, o1 = pd.Timestamp("2023-03-31 12:17"), pd.Timestamp("2024-01-05")
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6.5), layout="constrained", sharex=True,
+                                   gridspec_kw={"height_ratios": [2, 1]})
+    for ax in (ax1, ax2):
+        shade(ax, o0, o1, "TSMS02 gauge dead (flagged rain_gauge_dead)" if ax is ax1 else None)
+    for sid in SITES["Ankara"]:
+        t = station(sid, a, b)["tipping"]
+        line(ax1, t.fillna(0).cumsum().where(t.notna()), sid, sid)
+        tips = (t > 0).resample("W").sum()
+        ax2.step(tips.index, tips.values, where="post", color=COLOR[sid], lw=LW, label=sid)
+    r = reference("Ankara", a, b)["total_rainfall"]
+    r = r.where(r.index < "2023-03-06", r / 10)          # SF-09: divide the x10 period for comparison
+    line(ax1, r.fillna(0).cumsum().where(r.notna()), "ref", "Ankara reference (÷10 from 6 Mar 2023, SF-09)", ls="--")
+    ax1.set_ylabel("Cumulative rain (mm)")
+    ax2.set_ylabel("Minutes with a tip\nper week")
+    legend(ax1); legend(ax2, loc="upper right")
+    panel_tag(ax1, "A  cumulative rain before QC"); panel_tag(ax2, "B  tipping activity")
+    time_axis(ax2)
+    fig.suptitle("SF-29 · TSMS02 · rain gauge dead during the anemometer outage (7 tips in 9 months)", fontweight="bold")
+    return save(fig, OUT_3DP, "SF-29_TSMS02_rain_gauge_dead.png")
+
+
+def fig_sf30():
+    """SF-30: TSMS01 anemometer reads ~30% of TSMS00, 10 m away."""
+    a, b = "2022-09-01", "2025-11-30 23:59"
+    w = pd.DataFrame({sid: station(sid, a, b)["wind_speed"] for sid in SITES["Ankara"]})
+    w.loc["2023-03-31 12:17":"2024-01-11 10:02", "TSMS02"] = np.nan    # SF-20 outage
+    windy = w[w["TSMS00"] > 1]
+    fig = plt.figure(figsize=(12, 6), layout="constrained")
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.8, 1])
+    ax = fig.add_subplot(gs[0, 0])
+    for sid in ["TSMS01", "TSMS02"]:
+        ratio = (windy[sid] / windy["TSMS00"]).resample("ME").median()
+        n = windy[sid].notna().resample("ME").sum()
+        ratio = ratio.where(n >= 500)
+        ax.plot(ratio.index, ratio.values, color=COLOR[sid], lw=1.6, marker="o", ms=3, label=f"{sid} ÷ TSMS00")
+    ax.axhline(1, color="#888888", lw=0.8, ls=":")
+    ax.set_ylim(0, 1.6)
+    ax.set_ylabel("Monthly median speed ratio\n(minutes with TSMS00 > 1 m/s)")
+    legend(ax, loc="upper right")
+    panel_tag(ax, "A  speed relative to TSMS00, 10 m away")
+    time_axis(ax)
+    ax2 = fig.add_subplot(gs[0, 1])
+    h = w["2024-01-01":"2024-12-31"].resample("h").mean().dropna(subset=["TSMS00", "TSMS01"])
+    ax2.scatter(h["TSMS00"], h["TSMS01"], s=3, color=COLOR["TSMS01"], lw=0, alpha=0.4, rasterized=True, label="TSMS01 (hourly, 2024)")
+    m = max(h["TSMS00"].max(), 1)
+    ax2.plot([0, m], [0, m], color="#888888", lw=0.8, ls=":", label="1:1")
+    ax2.set_xlim(0, m); ax2.set_ylim(0, m)
+    ax2.set_xlabel("TSMS00 wind speed (m/s)"); ax2.set_ylabel("TSMS01 wind speed (m/s)")
+    legend(ax2, ncol=1, loc="upper left")
+    panel_tag(ax2, "B  hourly means, 2024")
+    fig.suptitle("SF-30 · TSMS01 · anemometer reads about 30% of its neighbour (suspected)", fontweight="bold")
+    return save(fig, OUT_3DP, "SF-30_TSMS01_anemometer_low_reading.png")
+
+
+def fig_sf31():
+    """SF-31: Adana reference reports many days with small rain amounts that 3D-PAWS gauges don't."""
+    a, b = "2022-11-10", "2025-11-30 23:59"
+    series = [("ref", "Adana reference", reference("Adana", a, b)["total_rainfall"])] + \
+             [(sid, sid, station(sid, a, b)["tipping"]) for sid in SITES["Adana"]]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.5), layout="constrained")
+    bins = [0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 5.0, 10.0]
+    labels = ["0.2–0.4", "0.4–0.6", "0.6–0.8", "0.8–1.0", "1–2", "2–5", "5–10"]
+    x = np.arange(len(labels))
+    for k, (key, lab, s) in enumerate(series):
+        d = daily(s, "sum", 0.8)
+        if key == "TSMS08":                              # tampering / connector periods (station-events.csv)
+            d = d.where(~d.index.isin(pd.date_range("2023-04-08", "2023-04-14").append(pd.date_range("2023-05-15", "2023-05-17"))))
+        counts = pd.cut(d.dropna(), bins, right=False, labels=labels).value_counts().reindex(labels)
+        ax1.bar(x + (k - 1.5) * 0.2, counts.values, width=0.2, color=COLOR[key], lw=0, label=lab)
+        small = ((d >= 0.2) & (d < 1.0)).resample("QE").sum().where(d.resample("QE").count() >= 60)
+        ax2.plot(small.index, small.values, color=COLOR[key], lw=LW_REF if key == "ref" else LW, marker="o", ms=3, label=lab)
+    ax1.set_xticks(x, labels)
+    ax1.set_xlabel("Daily total (mm)"); ax1.set_ylabel("Days")
+    legend(ax1, ncol=2, loc="upper right")
+    panel_tag(ax1, "A  wet days by daily total, 80%-complete days")
+    ax2.set_ylabel("Days with 0.2–1.0 mm per quarter")
+    legend(ax2, ncol=2, loc="upper left")
+    panel_tag(ax2, "B  small-amount days over time")
+    time_axis(ax2)
+    fig.suptitle("SF-31 · Adana reference · many days with 0.2–1 mm that the 3D-PAWS gauges don't record (suspected)", fontweight="bold")
+    return save(fig, OUT_REF, "SF-31_Adana_reference_small_rain_amounts.png")
 
 
 def fig_sf09():
@@ -745,12 +830,28 @@ FIGS = {  # id: (function, folder, caption)
               "From 10 Jun 18:56 to 11 Jun 06:20 UTC 2025 the Ankara reference vane reads 0° (shaded = the 643 "
               "removed minutes) while its own anemometer reports 2–5 m/s and the TSMS00–02 vanes point "
               "east; the vane actually stays at 0° until 07:39 and again from 11:26."),
-    "SF-28": (fig_sf28, OUT_REF,
-              "Daily rain Jun–Sep 2023: after 5 Jul the Konya reference records 0 mm while TSMS03–05 each "
-              "record a few mm on many days (shaded = flagged rain_dead_gauge). The right panel questions the "
-              "flag: in Jul–Aug 2023 the 3D-PAWS tips happen at reference RH of 10–60% and bunch at about "
-              "09:50–10:00 and 13:50 UTC every day, which looks like a watering schedule at the 3D-PAWS "
-              "gauges rather than rain missed by the reference."),
+    "SF-28": (fig_sf28, OUT_3DP,
+              "Daily rain Jun–Sep 2023: from July the three Konya 3D-PAWS gauges record a few mm on many dry "
+              "days while the reference records 0.6 mm in Jul–Aug (shaded = flagged courtyard_watering, "
+              "1 Jul – 2 Sep 2023). Right: the tips fall at reference RH of 10–60% and bunch at about "
+              "09:50–10:00 and 13:50 UTC every day, a watering schedule in the courtyard. The reference is right."),
+    "SF-29": (fig_sf29, OUT_3DP,
+              "TSMS02's rain gauge records 7 tips from 31 Mar 2023 to 4 Jan 2024 (shaded, flagged "
+              "rain_gauge_dead) while TSMS00 and the Ankara reference (÷10 during SF-09, dashed) keep "
+              "accumulating (TSMS01 barely does either: its stuck bucket, SF-21); the same span as its SF-20 anemometer outage, so possibly the same "
+              "disconnected harness. (B) minutes with a tip per week."),
+    "SF-30": (fig_sf30, OUT_3DP,
+              "(A) Monthly median of TSMS01's (and TSMS02's) wind speed divided by TSMS00's, 10 m away, over "
+              "minutes when TSMS00 reads > 1 m/s: TSMS02 sits at about 0.5–0.9, TSMS01 at about 0.24–0.35 from "
+              "2023 (0.4–0.5 in late 2022). (B) Hourly means in 2024 fall far below the 1:1 line. Suspected assembly (SMN "
+              "found a misplaced magnet halves the reading) or bearing fault; not removed."),
+    "SF-31": (fig_sf31, OUT_REF,
+              "(A) Days by daily total on 80%-complete days: the Adana reference has many more days with "
+              "0.2–1.0 mm than TSMS06–08 (≈ 290 of its 429 wet days at the 0.2 mm threshold); above 1 mm the "
+              "counts are closer. (B) Small-amount days per quarter: the reference peaks in summer, 73 of 92 "
+              "days in Jul–Sep 2023 and 60 in Jul–Sep 2024, when Adana is dry, then fades in 2025. Likely "
+              "dew or condensation counted as rain; suspected, not flagged. TSMS08's "
+              "tampering days are left out."),
     "SF-09": (fig_sf09, OUT_REF,
               "Monthly rain (before QC): the Ankara reference matches TSMS00/02 until early March 2023, then "
               "reads about 10 times more every month (dashed = reference ÷10, which tracks the 3D-PAWS); "

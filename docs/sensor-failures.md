@@ -14,7 +14,7 @@ removals are logged in each station's `*_outliers.csv` with `outlier_type = stat
 and flagged periods go to `station_event_flags.csv`. Times are as recorded in the data files
 (timezone not yet verified; see method-differences G5).
 
-Last updated 2026-09-29 (SF-20, SF-21 from the Jan 2024 maintenance logs; SF-22 to SF-26 from the QC stage 3 persistence checks; SF-27, SF-28 from the Step 6 neighbour check; SF-17 now removed).
+Last updated 2026-09-29 (SF-20, SF-21 from the maintenance logs; SF-22–26 from the persistence checks; SF-27, SF-28 from the neighbour check; SF-09, 17, 22, 26–28 corrected and SF-29–31 added from the diagnostic figures; confirmed failures encoded in station-events.csv).
 
 ---
 
@@ -30,7 +30,7 @@ Last updated 2026-09-29 (SF-20, SF-21 from the Jan 2024 maintenance logs; SF-22 
 | SF-06 | TSMS02 (Ankara) | SHT31D / `sth_hum` | Large low bias (−25 %RH vs. reference) | Post-upgrade | Suspected |
 | SF-07 | TSMS06 (Adana) | SHT31D / `sth_hum` | Low bias (−8 %RH vs. reference) | Post-upgrade | Suspected |
 | SF-08 | TSMS03, TSMS04 | ~~Anemometer~~ / `wind_speed` | Speeds far above reference (bias ≈ 21 and 6 m/s), r ≈ 0. **Root cause 2026-09-28: SF-10** (e.g. TSMS03's "wind_speed" is HTU21D humidity from Dec 2024, TSMS04's is visible light) | Jan–Mar 2024 and Dec 2024 → end | Dec 2024+ fixed 2026-09-28; Jan–Mar 2024 open |
-| SF-09 | Ankara TSMS reference | Rain gauge / `total_rainfall` | ≈ 3,500 mm/yr with 1-min spikes up to 31.5 mm; hundreds of mm in many months from Mar 2023 (e.g. 979 mm May 2023 vs. 84 mm at TSMS00) but plausible in others. Separate pipeline from SF-10 (TSMS text file). **Lead (2026-09-28):** Ankara's reference uses an **accumulation (weighing) gauge**, while Konya, Adana and all 3D-PAWS use tipping buckets. If 1-min rain is derived from differences in accumulated weight, sensor noise and baseline shifts (WMO-No. 8 Vol. I Ch. 6) counted as positive increments would inflate totals **Update 2026-09-29: a ×10 scaling error, not gauge noise.** Wet-day ratio reference ÷ TSMS00 is 0.97 before 2023-03-06 and 9.96 after (126 wet days); totals after that date 11,253 mm vs. 833 mm. The same day the reference's reporting step changes from 0.01 mm to exactly 0.1 mm (last finer value 2023-03-06 04:21; duplicate timestamps around 02:02 suggest a logger change). Dividing by 10 tracks the 3D-PAWS gauges | 2023-03-06 → end | **Confirmed** (data); flagged where uncorroborated. Correction (÷10) or exclusion pending a decision |
+| SF-09 | Ankara TSMS reference | Rain gauge / `total_rainfall` | ≈ 3,500 mm/yr with 1-min spikes up to 31.5 mm; hundreds of mm in many months from Mar 2023 (e.g. 979 mm May 2023 vs. 84 mm at TSMS00) but plausible in others. Separate pipeline from SF-10 (TSMS text file). **Lead (2026-09-28):** Ankara's reference uses an **accumulation (weighing) gauge**, while Konya, Adana and all 3D-PAWS use tipping buckets. If 1-min rain is derived from differences in accumulated weight, sensor noise and baseline shifts (WMO-No. 8 Vol. I Ch. 6) counted as positive increments would inflate totals **Update 2026-09-29: a ×10 scaling error, not gauge noise.** Wet-day ratio reference ÷ TSMS00 is 0.97 before 2023-03-06 and 9.96 after (126 wet days); totals after that date 11,253 mm vs. 833 mm. The same day the reference's reporting step changes from 0.01 mm to exactly 0.1 mm (last finer value 2023-03-06 04:21; duplicate timestamps around 02:02 suggest a logger change). Dividing by 10 tracks the 3D-PAWS gauges | 2023-03-06 → end | **Confirmed; flagged** from 2023-03-06 (station-events `rain_scaling_x10`, every reference rain value carries the flag). Correction (÷10) or exclusion is a team decision |
 | SF-10 | TSMS02, 03, 04, 05, 08 | **All columns** (data pipeline, not a sensor) | CHORDS export column misalignment: data rows are in a different column order than the file header, so every variable is mislabeled | CHORDS start (12–16 Jan 2024) → 2024-03-10 23:59 UTC, and 2024-12-01 → end of record | **Fixed 2026-09-28** (`splice_chords_dec2024.py`): Dec 2024+ from the correctly labeled batch; Jan–Mar 2024 re-mapped by inference (except SF-15) |
 | SF-15 | TSMS04 (Konya) | HTU21D, BMP280, MCP9808 temperatures | Sensor identity of the three temperature columns can't be established in the re-mapped Jan–Mar 2024 window (SF-10) | 2024-01-12 09:10 → 2024-03-10 20:31 | **Excluded** (written as missing in `data/reformatted`); see [methods.md](methods.md) §3 |
 | SF-16 | Several 3D-PAWS gauges | Tipping bucket / `tipping` | Months of near-zero rain while the reference and neighbouring gauges record rain (possible clogging, a stuck bucket, or a connection fault). From the 2026-09-28 cleaned data: TSMS03 0–1 mm/month Apr–Sep 2024 (Konya reference 12–63); TSMS08 0–1 mm Apr–Sep 2024 (Adana ref 14–92); TSMS01 0–7 mm for most of 2023–2024; TSMS02 0 mm Aug–Oct 2024 and Feb–Mar 2025; TSMS00 0 mm Jun–Nov 2025. Overlaps SF-11 (TSMS04 from Apr 2025) | See description | Suspected; not yet bounded or removed |
@@ -43,15 +43,16 @@ Last updated 2026-09-29 (SF-20, SF-21 from the Jan 2024 maintenance logs; SF-22 
 | SF-14 | TSMS06, TSMS08 (Adana) | BMP280 / `bmp2_pres` | TSMS06: 0 hPa in Oct 2024 and Mar–May 2025 (the SF-17 logger zeros) and ≈ 670 hPa (SLP ≈ 664–678) from Jun 2025 (Adana ≈ 1,010 hPa). TSMS08 mostly `-999.9` (now treated as missing, Step 0). Found by the Step 0 layout guard (2026-09-29); removed by the range check | TSMS06: Oct 2024; Mar 2025 → end | Suspected (TSMS06 pressure failed from Jun 2025) |
 | SF-20 | TSMS02 (Ankara) | Cup anemometer / `wind_speed` | **Disconnected.** The anemometer developed a short circuit that tripped the RPi, so it was unplugged (Ankara maintenance log, 2024-01-17). `wind_speed` is exactly 0 for all 407,009 readings while the reference median is 1.5 m/s (62% of minutes > 1 m/s). The vane kept working | 2023-03-31 12:17 → 2024-01-11 10:02 (last working reading 2023-03-15 11:00, then a record gap; first nonzero 2024-01-11 10:03) | **Removed** (Step 1); `wind_dir` kept |
 | SF-21 | TSMS00, 01, 06, 07 | Tipping buckets / `tipping`; TSMS07 anemometer | Conditions found at the Jan 2024 visits: TSMS00 gauge significantly off level and possibly stuck on one side; TSMS01 bucket possibly stuck; TSMS06 two ~5 mm pebbles in the funnel orifice; TSMS07 funnel screens missing; TSMS07 anemometer binding (corroded bearing, rotor replaced) | Start unknown → visit day (2024-01-17 Ankara, 2024-01-15 Adana) | **Flagged** (Step 1), not removed: the logs show degraded conditions, not failed data. Bounding the start is Step 6's job (neighbour rain / wind comparison) |
-| SF-22 | TSMS01 (Ankara) | Wind vane / `wind_dir` | Reads exactly 0.0° almost every minute from 2024-10-21 to 2024-11-21 while the cups turn; 0.0° is 44,314 of its readings overall, 20× its next most common value | Oct 2024 → Nov 2024 | **Partly removed** (Step 4b): 6,625 readings in runs with ≥ 60 min of wind ≥ 1 m/s. The remaining 0.0° readings in lighter wind are probably the same fault; bound and add to station-events.csv (open) |
+| SF-22 | TSMS01 (Ankara) | Wind vane / `wind_dir` | Reads exactly 0.0° almost every minute from 2024-10-21 to 2024-11-21 while the cups turn; 0.0° is 44,314 of its readings overall, 20× its next most common value | Oct 2024 → Nov 2024 | **Removed** 2024-10-21 12:34 → 2024-11-21 12:25 (station-events `vane_stuck_at_0`, 2026-09-29; previously only 6,625 windy readings) |
 | SF-23 | **Ankara TSMS reference** | Logger (all variables) | **Frozen record:** temperature, humidity, pressure, wind speed (1.4–10.2 m/s) and direction all repeat the same values for 65–236 min, in 25 runs on 22 days (19 Jul and 8 Aug have two), mostly starting 05:51–06:18 UTC, some 08:03–10:04; first on 2025-06-30 | Jun–Aug 2025 | **Removed** (Step 4b "logger_frozen"; 2,875 minutes). Feedback for TSMS |
 | SF-24 | **Ankara TSMS reference** | Humidity (Rotronic MP101A) / `humidity` | Flat at exactly 10% for 5–9 h on summer afternoons while temperature changes: looks like a reporting floor | 2023-08-15, 2023-08-16 (221 min), 2024-06-23, 2024-06-24 | **Removed** (Step 4b persistence; 1,475 readings). Feedback for TSMS |
 | SF-25 | **Ankara TSMS reference** | Wind vane (Lastem DNA011) / `avg_wind_dir` | Reads 0° for 643 min while the reference speed is ≈ 2.8 m/s (until 07:39 on 11 Jun, and again from 11:26; QC removed only up to 06:20) | Jun 2025 (10–11 Jun) | **Removed** (Step 4b). Feedback for TSMS |
-| SF-26 | **Adana TSMS reference** | Anemometer (Lastem DNA002) / `avg_wind_speed` | **Outage:** exactly 0 m/s in ≈ 100% of minutes from 2025-08-10 to 2025-10-12 (at most 54 nonzero minutes a day; single zero runs up to ≈ 7 days); ≈ 1.9 m/s daily mean in July; recovers 13 Oct. The Step 6 calm check removed only 213 min because the 2 m 3D-PAWS winds at Adana are mostly below 1.5 m/s | 2025-08-10 → 2025-10-12 | **Confirmed** (data, 2026-09-29). Removal of the period pending a decision |
-| SF-27 | TSMS08 (Adana) | Cup anemometer / `wind_speed` | **Not responding:** runs of exactly 0 m/s ≥ 3 h while both other Adana 3D-PAWS anemometers read a median ≥ 1.5 m/s (above the cups' ≤ 1.2 m/s start-up, SMN tunnel tests). Concentrated May–Sep 2023 (46,300 of 58,189 minutes), with more in summer 2024. The evaluation plan says TSMS08's cup mechanism was replaced in January 2024; its median speed is 0.3 m/s vs. 0.9 at TSMS06/07 Figures (2026-09-29): TSMS08 reads 0 in 93–100% of minutes May–Dec 2023 and 90–100% Jun–Oct 2024, so the removed minutes (neighbours windy) are only part of the fault; after the Jan 2024 visit it also sits at an almost constant ≈ 0.7 m/s for days (17–27 Jan, 8–9 Feb, 15–18 Feb 2024), a second stuck value | May 2023 → Oct 2024 | **Removed** (Step 6 `anemometer_not_responding`, 58,189 minutes). Check the replaced unit's magnet placement (SMN found a misplaced magnet halves the reading) |
-| SF-28 | **Konya 3D-PAWS gauges** (TSMS03, 04, 05), not the reference | Tipping buckets / `tipping` | **Courtyard watering, not missed rain (corrected 2026-09-29).** In Jul–Aug 2023 all three gauges tip most days at ≈ 09:50–10:00 UTC (and ≈ 13:50) while the reference humidity is ≈ 27% (median at the tips) and the stations' own humidity agrees; the reference records 0.6 mm in the two months, TSMS03/04/05 record 83 / 139 / 104 mm. Step 6 flagged the *reference* as a dead gauge on 12 days, the wrong way round | Mainly Jul–Aug 2023 (other dry seasons to check) | **Confirmed** (pattern). The reference's `rain_dead_gauge` flags on those days are false; the 3D-PAWS tips carry `rain_low_rh`. Handling pending (flag or remove the watering tips) |
-| SF-29 | TSMS02 (Ankara) | Tipping bucket / `tipping` | **No rain recorded** during its anemometer outage: 7 tips from 2023-03-31 12:17 to 2024-01-04 (397,770 valid readings), while TSMS00/01 record rain. Same period as SF-20, so possibly the same disconnected harness | 2023-03-31 → 2024-01-04 | Suspected; partly caught by Step 6 dead-gauge days (21). Candidate for station-events.csv |
-| SF-30 | TSMS01 (Ankara) | Cup anemometer / `wind_speed` | **Reads ≈ 30% of TSMS00:** median ratio TSMS01 ÷ TSMS00 when TSMS00 > 1 m/s is 0.28 (2023), 0.26 (2024), 0.30 (2025), 0.45 (2022), for stations ≈ 10 m apart. SMN found a misplaced magnet halves the reading | 2023 → end | Suspected (assembly or bearing); check the unit |
+| SF-26 | **Adana TSMS reference** | Anemometer (Lastem DNA002) / `avg_wind_speed` | **Outage:** exactly 0 m/s in ≈ 100% of minutes from 2025-08-10 to 2025-10-12 (at most 54 nonzero minutes a day; single zero runs up to ≈ 7 days); ≈ 1.9 m/s daily mean in July; recovers 13 Oct. The Step 6 calm check removed only 213 min because the 2 m 3D-PAWS winds at Adana are mostly below 1.5 m/s | 2025-08-10 → 2025-10-12 | **Removed** 2025-08-09 14:00 → 2025-10-13 07:59 (station-events `anemometer_outage`, 2026-09-29) |
+| SF-27 | TSMS08 (Adana) | Cup anemometer / `wind_speed` | **Not responding:** runs of exactly 0 m/s ≥ 3 h while both other Adana 3D-PAWS anemometers read a median ≥ 1.5 m/s (above the cups' ≤ 1.2 m/s start-up, SMN tunnel tests). Concentrated May–Sep 2023 (46,300 of 58,189 minutes), with more in summer 2024. The evaluation plan says TSMS08's cup mechanism was replaced in January 2024; its median speed is 0.3 m/s vs. 0.9 at TSMS06/07 Figures (2026-09-29): TSMS08 reads 0 in 93–100% of minutes May–Dec 2023 and 90–100% Jun–Oct 2024, so the removed minutes (neighbours windy) are only part of the fault; after the Jan 2024 visit it also sits at an almost constant ≈ 0.7 m/s for days (17–27 Jan, 8–9 Feb, 15–18 Feb 2024), a second stuck value | May 2023 → Oct 2024 | **Removed** (2026-09-29, station-events): 2023-04-29 → 2024-01-12 and Jun–Oct 2024 (90–100% zeros), plus the 0.7 m/s stuck spans 16–28 Jan, 8–11 Feb, 14–19 Feb 2024. Apr–May 2024 (63–76% zeros) left to the Step 6 calm check. Check the replaced unit's magnet |
+| SF-28 | **Konya 3D-PAWS gauges** (TSMS03, 04, 05), not the reference | Tipping buckets / `tipping` | **Courtyard watering, not missed rain (corrected 2026-09-29).** In Jul–Aug 2023 all three gauges tip most days at ≈ 09:50–10:00 UTC (and ≈ 13:50) while the reference humidity is ≈ 27% (median at the tips) and the stations' own humidity agrees; the reference records 0.6 mm in the two months, TSMS03/04/05 record 83 / 139 / 104 mm. Step 6 flagged the *reference* as a dead gauge on 12 days, the wrong way round | Mainly Jul–Aug 2023 (other dry seasons to check) | **Flagged** `courtyard_watering` 1 Jul – 2 Sep 2023 at TSMS03/04/05 and Jul 2025 at TSMS05 (suspected; 55 watering-like tips in the SF-12 month). The reference's false `rain_dead_gauge` flags remain in the flag file (the neighbour rule can't tell); tips also carry `rain_low_rh` |
+| SF-29 | TSMS02 (Ankara) | Tipping bucket / `tipping` | **No rain recorded** during its anemometer outage: 7 tips from 2023-03-31 12:17 to 2024-01-04 (397,770 valid readings), while TSMS00/01 record rain. Same period as SF-20, so possibly the same disconnected harness | 2023-03-31 → 2024-01-04 | **Flagged** `rain_gauge_dead` 2023-03-31 12:17 → 2024-01-04 (station-events, 2026-09-29) |
+| SF-30 | TSMS01 (Ankara) | Cup anemometer / `wind_speed` | **Reads ≈ 30% of TSMS00:** median ratio TSMS01 ÷ TSMS00 when TSMS00 > 1 m/s is 0.28 (2023), 0.26 (2024), 0.30 (2025), 0.45 (2022), for stations ≈ 10 m apart (TSMS02 ÷ TSMS00 is ≈ 0.5–0.9 over the same minutes). SMN found a misplaced magnet halves the reading | 2023 → end | Suspected; noted in station-events (`anemometer_low_reading`), not removed. Check the unit (magnet, bearing) |
+| SF-31 | **Adana TSMS reference** | Rain gauge / `total_rainfall` | **Many days with 0.2–1.0 mm** that the 3D-PAWS gauges don't record: 290 of its 429 wet days (≥ 0.2 mm) are below 1 mm. They peak in the dry summer: 73 of 92 days in Jul–Sep 2023 and 60 in Jul–Sep 2024, fading in 2025. Likely dew or condensation counted as rain. Explains most of Adana's low POD at 0.2 mm | Mainly summers 2023 and 2024 | Suspected; not flagged. TSMS question 15 |
 
 Previously handled in code before this catalog: TSMS04 fabrication test tips (start of record →
 2022-08-31) and TSMS08 rainfall from a suspected faulty connector or tampering (seven date ranges,
@@ -389,11 +390,55 @@ These came out of measuring flat-line runs before setting the Step 4b limits (se
   2024 (around the visit); short stuck-vane runs at TSMS06, 07 and 08. The TSMS03 HTU21D stuck at
   −46.85 °C for 77 h (Oct 2022) is already removed by Phase 4 (`station_rules`).
 
-## Figures (2026-09-29)
+## SF-26 to SF-31: what the diagnostic figures showed (2026-09-29)
 
-Diagnostic figures for SF-09, 17, 20, 21, 22, 23, 24, 25, 26, 27 and 28 are in
-`plots/diagnostics/3dpaws-sensor-failure/` and `plots/diagnostics/tsms-sensor-failure/` (each with a
-README of captions), made by `scripts/plotter/plot-sensor-failures.py`. Building them corrected SF-09
-(×10 scaling), SF-28 (watering, reversed), SF-26 (confirmed outage), SF-17 (all sensors in Sep–Oct
-2024), SF-27, SF-22, SF-23, SF-24 and SF-25, and found SF-29 and SF-30. (`plots/` is gitignored.)
+Building a figure for every failure meant looking at each one at full resolution. Every
+statement below was checked against the reformatted minute data.
 
+**SF-09, Ankara reference rain ×10.** On wet days, reference ÷ TSMS00 is 0.97 before 6 March 2023
+and 9.96 after (126 wet days). Reference totals after that date are 11,253 mm vs. TSMS00's 833 mm.
+
+On the same day the reporting step changes:
+- the last value finer than 0.1 mm is at 2023-03-06 04:21;
+- from 11 March every value is a multiple of 0.1 mm;
+- duplicate timestamps around 02:02 on 6 March suggest a logger change.
+
+Divided by 10 it tracks the 3D-PAWS gauges (figures SF-09, SF-29). This is a scaling error, not
+weighing-gauge noise. It's flagged, not corrected: that's a team decision, and ideally TSMS confirms it.
+
+**SF-26, Adana reference anemometer outage.** The last normal hour is 2025-08-09 13:00 UTC. The
+anemometer then reads exactly 0 m/s in ≈ 100% of minutes until 2025-10-13 08:00; the July daily mean
+was ≈ 1.9 m/s. The Step 6 calm check missed it: Adana's 2 m 3D-PAWS winds are mostly below 1.5 m/s,
+so two neighbours rarely clear the bar together. It's now a documented `remove` event.
+
+**SF-28, Konya courtyard watering (reversed).** In Jul–Aug 2023 all three Konya gauges tip on dry
+days, mostly at 09:50–10:00 UTC and ≈ 13:50, at a median reference humidity of 27% (the stations'
+own sensors agree). The reference recorded 0.6 mm in those two months; TSMS03/04/05 recorded 83,
+139 and 104 mm. That's a watering schedule landing in the 3D-PAWS gauges.
+
+The Step 6 dead-gauge rule flagged the *reference* on 12 days because it assumes one gauge fails
+while the others are right; here one cause hit all three 3D-PAWS gauges. The same signature appears
+at TSMS05 in July 2025, the month of its SF-12 junk rain (2,108 mm). The rain-vs-humidity flag
+(`rain_low_rh`) catches these tips.
+
+**SF-29, TSMS02 rain gauge dead.** 7 tips from 2023-03-31 12:17 to 2024-01-04, exactly the span
+of its unplugged anemometer (SF-20). Possibly the same disconnected harness or connector; ask
+whoever serviced it.
+
+**SF-30, TSMS01 anemometer low.** Over minutes when TSMS00 reads > 1 m/s, TSMS01 reads a monthly
+median of 0.24–0.35 of TSMS00 from 2023 (0.4–0.5 in late 2022), 10 m away; TSMS02 reads 0.5–0.9.
+Hourly means in 2024 lie far below the 1:1 line and are nearly proportional, which points to an
+instrument fault rather than siting. SMN found a misplaced magnet halves the reading. Not removed,
+because it still tracks the wind; check the unit.
+
+**SF-31, Adana reference small amounts.** 290 of the reference's 429 wet days at the 0.2 mm
+threshold carry 0.2–1.0 mm; the 3D-PAWS gauges record far fewer such days. They cluster in the dry
+summers (73 of 92 days in Jul–Sep 2023, 60 in Jul–Sep 2024), so they're likely dew or condensation,
+not rain. This is most of why Adana's POD is low at 0.2 mm and recovers at 1.0 mm.
+
+## Figures
+
+Diagnostic figures for SF-09, 17, 20–31 are in `plots/diagnostics/3dpaws-sensor-failure/` and
+`plots/diagnostics/tsms-sensor-failure/`, each with a README of captions. They're made by
+`scripts/plotter/plot-sensor-failures.py` from the reformatted (pre-QC) minute data. `plots/` is
+gitignored.

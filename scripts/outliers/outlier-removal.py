@@ -56,7 +56,8 @@ outlier_reasons = [
 flag_reasons = ["rain_low_rh", "step", "hampel", "z_score", "stat_untested", "rain_dead_gauge", "rain_uncorroborated"]
 
 # Step 1: documented station events (maintenance logs, sensor-failures catalog, known bad periods), one row per
-# event: station, start, end, variables, action, event, catalog_id, source, notes. A blank start/end means the
+# event: station, start, end, variables, action, event, catalog_id, source, notes. station is a 3D-PAWS id (TSMS00-08)
+# or a TSMS reference as REF-<site> (REF-Ankara, REF-Konya, REF-Adana). A blank start/end means the
 # start/end of the record; variables is a space-separated list of 3D-PAWS columns, or "all".
 #   remove -> values set to NaN and logged as "station_event:<event>" (documented failures)
 #   flag   -> values kept; the period is written to station_event_flags.csv (suspect; flag columns come in Step 8)
@@ -622,6 +623,10 @@ for i in range(len(station_directories)):
     paws_df_FILTERED, log, flags = metadata_step(paws_df_FILTERED, station, paws_cols)
     paws_outliers = pd.concat([paws_outliers, log], ignore_index=True)
     event_flags_all.extend(flags)
+    ref_id = "REF-" + ("Ankara" if i in [0,1,2] else "Konya" if i in [3,4,5] else "Adana")
+    tsms_df_FILTERED, log, flags = metadata_step(tsms_df_FILTERED, ref_id, tsms_cols)   # the site's reference
+    tsms_outliers = pd.concat([tsms_outliers, log], ignore_index=True)
+    event_flags_all.extend(flags)
 
 
     """
@@ -1148,7 +1153,7 @@ for site, sd in site_data.items():
 
     print("Step 8: Output with flag columns (<column>_flag; empty = good).")
     ref = sd['ref']
-    add_flag_columns(ref['df'], ref['flags'], ref.get('corroborated', {}), tsms_cols)
+    add_flag_columns(ref['df'], ref['flags'], ref.get('corroborated', {}), tsms_cols, station=f"REF-{site}")
     for st, inst in sd['stations'].items():
         add_flag_columns(inst['df'], inst['flags'], inst.get('corroborated', {}),
                          [c for c in paws_cols if c != 'bme2_hum'], station=st)
@@ -1169,6 +1174,6 @@ for site, sd in site_data.items():
 pd.DataFrame(layout_warnings_all, columns=['file', 'column', 'month', 'median', 'expected']).drop_duplicates().to_csv(
     data_destination + "structure_layout_warnings.csv", index=False)
 print(f"\nStep 0 layout guard: {len(layout_warnings_all)} warning(s) -> {data_destination}structure_layout_warnings.csv")
-pd.DataFrame(event_flags_all, columns=['station', 'start', 'end', 'variables', 'event', 'catalog_id', 'readings', 'notes']).to_csv(
+pd.DataFrame(event_flags_all, columns=['station', 'start', 'end', 'variables', 'event', 'catalog_id', 'readings', 'notes']).drop_duplicates().to_csv(
     data_destination + "station_event_flags.csv", index=False)
 print(f"Step 1 flagged periods: {len(event_flags_all)} -> {data_destination}station_event_flags.csv")

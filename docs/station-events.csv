@@ -35,3 +35,17 @@ TSMS05,,2024-01-12 00:00,all,note,connectivity_issues,,Maintenance log Konya 202
 TSMS00,2024-01-17 00:00,,all,note,software_update,,Maintenance log Ankara 2024-01-17,RPi software upgraded to the latest version (all three Ankara stations). Only TSMS02 shows the SF-10 layout change (2024-03-11)
 TSMS01,2024-01-17 00:00,,all,note,software_update,,Maintenance log Ankara 2024-01-17,As above
 TSMS02,2024-01-17 00:00,,all,note,software_update,,Maintenance log Ankara 2024-01-17,As above
+REF-Adana,2025-08-09 14:00,2025-10-13 07:59,avg_wind_speed,remove,anemometer_outage,SF-26,Data (plots/diagnostics/tsms-sensor-failure/SF-26),"Reference anemometer reads exactly 0 m/s in ~100% of minutes (last normal hour 2025-08-09 13:00 UTC, first 2025-10-13 08:00); ~1.9 m/s daily mean in July. Not caught by the Step 6 calm check (2 m winds at Adana mostly < 1.5 m/s)"
+REF-Ankara,2023-03-06 00:00,,total_rainfall,flag,rain_scaling_x10,SF-09,Data (plots/diagnostics/tsms-sensor-failure/SF-09),"Reference rain ~10x the 3D-PAWS gauges from 6 Mar 2023 (wet-day ratio vs. TSMS00 0.97 before, 9.96 after); reporting step changes from 0.01 to 0.1 mm the same day. Flag only: correction (divide by 10) or exclusion is a team decision"
+TSMS01,2024-10-21 12:34,2024-11-21 12:25,wind_dir,remove,vane_stuck_at_0,SF-22,Data (plots/diagnostics/3dpaws-sensor-failure/SF-22),"Vane reads exactly 0.0 deg almost every minute while the cups turn (first/last 0.0 of the run). Step 4b removed only the windiest runs"
+TSMS08,2023-04-29 00:00,2024-01-12 23:59,wind_speed,remove,anemometer_not_responding,SF-27,Data (plots/diagnostics/3dpaws-sensor-failure/SF-27),"Reads 0 in 93-100% of minutes each month May-Dec 2023 while TSMS06/07 read wind; cup mechanism replaced at the Jan 2024 visit"
+TSMS08,2024-01-16 00:00,2024-01-28 23:59,wind_speed,remove,anemometer_stuck_value,SF-27,Data,"After the visit: stuck at 0.7 m/s for ~93% of each day"
+TSMS08,2024-02-08 00:00,2024-02-11 23:59,wind_speed,remove,anemometer_stuck_value,SF-27,Data,As above
+TSMS08,2024-02-14 00:00,2024-02-19 23:59,wind_speed,remove,anemometer_stuck_value,SF-27,Data,As above
+TSMS08,2024-06-01 00:00,2024-10-31 23:59,wind_speed,remove,anemometer_not_responding,SF-27,Data,"Reads 0 in 90-100% of minutes each month Jun-Oct 2024 (Apr-May 2024, 63-76% zeros, left to the Step 6 calm check)"
+TSMS02,2023-03-31 12:17,2024-01-04 23:59,tipping,flag,rain_gauge_dead,SF-29,Data (plots/diagnostics/3dpaws-sensor-failure/SF-29),"7 tips in 9 months while TSMS00/01 record rain; same period as the SF-20 anemometer outage (possibly the same disconnected harness)"
+TSMS03,2023-07-01 00:00,2023-09-02 23:59,tipping,flag,courtyard_watering,SF-28,Data (plots/diagnostics/3dpaws-sensor-failure/SF-28),"Tips at ~09:50-10:00 (and ~13:50) UTC on dry days at ~27% RH while the reference records 0.6 mm in Jul-Aug 2023: watering in the Konya courtyard"
+TSMS04,2023-07-01 00:00,2023-09-02 23:59,tipping,flag,courtyard_watering,SF-28,Data,As above
+TSMS05,2023-07-01 00:00,2023-09-02 23:59,tipping,flag,courtyard_watering,SF-28,Data,As above
+TSMS05,2025-07-01 00:00,2025-07-31 23:59,tipping,flag,courtyard_watering,SF-28,Data,"Suspected: 55 watering-like tips (09:30-10:30 UTC, RH < 60%) in the month of the SF-12 junk rain (2,108 mm)"
+TSMS01,2023-01-01 00:00,,wind_speed,note,anemometer_low_reading,SF-30,Data (plots/diagnostics/3dpaws-sensor-failure/SF-30),"Reads ~26-30% of TSMS00 (median ratio when TSMS00 > 1 m/s) from 2023 on, stations ~10 m apart. Suspected assembly (magnet) or bearing fault; check the unit"

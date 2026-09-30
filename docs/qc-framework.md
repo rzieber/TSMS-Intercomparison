@@ -87,7 +87,9 @@ readings, Step 4b catches those independently, and the two steps confirm each ot
 **How it's implemented:** every known event is one row in [station-events.csv](station-events.csv)
 (station, start, end, variables, action, event, catalog ID, source, notes), built from the January
 2024 maintenance logs, the evaluation plan, and the sensor-failures catalog. The table is the single
-place to add, change or remove a documented event; the code has no hard-coded dates. Each row has
+place to add, change or remove a documented event; the code has no hard-coded dates. Rows can target a
+3D-PAWS station (`TSMS00`–`TSMS08`) or a TSMS reference (`REF-Ankara`, `REF-Konya`, `REF-Adana`), e.g. the
+Adana reference anemometer outage (SF-26). Each row has
 one of three actions:
 
 | Action | Used for | Effect |

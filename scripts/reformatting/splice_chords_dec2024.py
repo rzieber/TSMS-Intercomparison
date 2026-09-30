@@ -29,7 +29,7 @@ stable inter-sensor offsets (docs/sensor-failures.md SF-10). This period can't b
     - TSMS04's three temperature series in this window can't be assigned to a sensor with
       confidence, so they're written as missing (docs/sensor-failures.md SF-15, docs/methods.md).
 
-Originals are copied to data/reformatted_backup_pre-chords-splice/ (outside data/reformatted,
+Originals are copied to data/archive/reformatted_backup_pre-chords-splice/ (outside data/reformatted,
 so outlier-removal.py never picks them up) before anything is overwritten. The script always
 starts from those originals, so it can be re-run safely.
 ==========================================================================================
@@ -45,7 +45,7 @@ from dev import functions as func
 
 
 reformatted = Path("data/reformatted")
-backup = Path("data/reformatted_backup_pre-chords-splice")
+backup = Path("data/archive/reformatted_backup_pre-chords-splice")   # moved to data/archive 2026-09-29: the untouched original every splice starts from
 chords_dec = Path("data/raw/3D-PAWS/Dec-2024_Nov-2025")
 
 name_map = {    # CHORDS Dec 2024 batch header : reformatted column

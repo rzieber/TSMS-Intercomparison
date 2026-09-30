@@ -10,6 +10,13 @@ output = Path("data/error-analysis")
 data = Path("data/cleaned")
 
 TIMESCALE = 'h'    # 'h' --> hourly, 'D' --> daily, None --> point-for-point
+# Command line override (main.py uses it): python scripts/error/error-analysis.py --timescale D   (h | D | none)
+import argparse
+_cli = argparse.ArgumentParser(description="3D-PAWS vs TSMS error analysis and WMO classification")
+_cli.add_argument("--timescale", choices=["h", "D", "none"], help="aggregation before statistics (default: h)")
+_timescale = _cli.parse_args().timescale
+if _timescale is not None:
+    TIMESCALE = None if _timescale == "none" else _timescale
 
 # Wind regimes, classified from the TSMS reference only (never from the 3D-PAWS instrument under test).
 # Non-variable: reference 10-m speed >= 3.0 m/s (~6 kt), the same cutoff used for the wind-rose plots.

@@ -9,6 +9,115 @@ effect on results, and anything left open.
 
 ---
 
+## 2026-09-29: `plot-gen-final.py` restructured into named plot functions
+
+**Files:** `scripts/plotter/plot-gen-final.py`
+
+**Before (what was wrong):**
+- One 1,866-line loop over stations, with 20 plot sections. You chose plots by commenting sections in
+  and out.
+- Sections depended on each other's side effects: the box plots only worked because an earlier
+  section had set the date index.
+- Several sections couldn't run on today's data:
+  - pandas 3 removed `SettingWithCopyWarning`;
+  - `bme2_hum` is gone, and the new `_flag` text columns are present;
+  - `scatter-temp-sensors` used an undefined path.
+- Paths only worked from the repo root.
+
+**Change:**
+- Each section is now a function, with its header as the docstring and its special logic kept.
+  - Kept: Hellmann reduction, wind regimes from the reference, declinations, bias lists, per-sensor
+    loops, file names and folders.
+  - Alternatives kept as parameters (e.g. `regime`, `apply_declination` on the monthly wind roses).
+- A registry of 20 named plots and a command line:
+  - `python main.py plots --list`;
+  - `python main.py plots windrose boxplots --stations TSMS06 --sites Adana`;
+  - with no names, only `windrose` runs, as before.
+- Data is loaded once per site, numeric columns only. A missing sensor column is skipped with a note,
+  and a failing plot is reported without stopping the run. Uses the Agg backend.
+- Fixes limited to what was needed to run: the pandas 3 warning, NaN-safe fits, and an explicit date
+  index in the box plots. The difference plots' per-day loop became one merge; it matched the
+  original on 90 sampled days.
+
+**Verification:**
+- Default wind roses for TSMS00 and TSMS02–05 are byte-identical to the previous output (30 PNGs).
+- Every other plot ran on TSMS06 / Adana.
+- The wind roses for all nine stations were then regenerated from the current `data/cleaned` (54 PNGs).
+- The original script is the last committed version in git (`git show HEAD:scripts/plotter/plot-gen-final.py`).
+
+**Open:** nine bugs in the original sections were reported and deliberately left as they were
+(PF-45).
+
+## 2026-09-29: `main.py` command center; splice backup path; downstream re-run
+
+**Files:** `main.py` (rewritten), `scripts/error/error-analysis.py` (`--timescale` option),
+`scripts/reformatting/splice_chords_dec2024.py`, `scripts/plotter/plot-gen-final.py` (refactor, see next entry).
+
+**Before (what was wrong):**
+- `main.py` was only a docstring. Every step was run by hand, and error-analysis's timescale was changed
+  by editing the file.
+- **Backups sat inside the live data folders.** The user has moved them to `data/archive/`.
+- **The splice script would have corrupted a re-run.** It always rebuilds from
+  `data/reformatted_backup_pre-chords-splice/`, treated as the untouched original. With that folder
+  moved, a re-run would have copied the *already spliced* files in as the "original" and spliced them
+  twice.
+
+**Change:**
+- **`main.py`** runs each step as a subcommand, from the repo root, and stops on the first failure:
+  `status`, `reformat`, `splice`, `clean`, `analyze`, `compare`, `plots`, `failures`, `all`.
+  - `clean` asks first, then backs up `data/cleaned` to
+    `data/archive/cleaned-backup-<MMDDYYYY>_[BEFORE-<LABEL>]/` and verifies it byte for byte.
+  - `analyze` and `compare` back up their outputs the same way.
+- **The splice script** now reads its originals from `data/archive/reformatted_backup_pre-chords-splice/`.
+
+**Downstream re-run on the 2026-09-29 station-events cleaning** (previous outputs in
+`data/archive/analysis-backup-09292026_[BEFORE-REF-EVENTS-RERUN]/`):
+
+| Result | Change |
+|---|---|
+| TSMS08 wind speed | Class B → A (N 138,792 → 82,747; RMSE 0.70 → 0.48 m/s), after its dead-anemometer periods were removed |
+| TSMS06/07 wind speed | RMSE 0.44/0.42 → 0.37/0.35 m/s, after the Adana reference outage was removed |
+| Ankara rain, flagged days excluded | Now **0 paired days** at TSMS00/01 and 16–108 at TSMS02. The whole reference record from March 2023 is flagged (SF-09) and the pre-visit gauge flags cover the earlier months |
+| Konya rain, flagged days excluded | Loses 5–38 days (the watering period); CSI unchanged |
+
+The Ankara row makes the "flagged days excluded" rain result empty there until the ×10 decision.
+
+## 2026-09-29: Confirmed failures encoded as station events (incl. reference stations); `data/cleaned` re-run
+
+**Files:**
+- `scripts/outliers/outlier-removal.py`: Step 1 now also applies events to the site's TSMS reference, written as `REF-<site>` in `station-events.csv`. Reference flag columns carry `event:` flags, and `station_event_flags.csv` is de-duplicated.
+- `docs/station-events.csv`: 14 new rows.
+- `scripts/plotter/plot-sensor-failures.py`: new SF-29, SF-30, SF-31 figures; SF-28 rebuilt as watering and moved to the 3D-PAWS folder.
+
+**Before (what was wrong):**
+- **Station events couldn't target a reference station.** So the Adana reference outage (SF-26) and the Ankara ×10 rain (SF-09) had no documented handling.
+- **Several confirmed failures were only partly handled** by the automatic checks:
+  - TSMS01's stuck vane: 6,625 of ≈ 44,000 readings.
+  - TSMS08's dead anemometer: 58,189 minutes of a fault spanning months.
+- **Konya watering tips and TSMS02's dead gauge carried no flag.**
+
+**Change (following the framework: confirmed non-rain failures removed, rain only flagged):**
+
+| Action | Entry | What |
+|---|---|---|
+| Remove | SF-26 | Adana reference wind speed, 2025-08-09 14:00 → 2025-10-13 07:59 |
+| Remove | SF-22 | TSMS01 wind direction, 2024-10-21 12:34 → 2024-11-21 12:25 |
+| Remove | SF-27 | TSMS08 wind speed: 2023-04-29 → 2024-01-12; Jun–Oct 2024; the 0.7 m/s stuck spans in Jan–Feb 2024 |
+| Flag | SF-09 | Ankara reference rain from 2023-03-06 (`rain_scaling_x10`; no ÷10 correction applied) |
+| Flag | SF-29 | TSMS02 rain, 2023-03-31 → 2024-01-04 |
+| Flag | SF-28 | Konya rain, 1 Jul – 2 Sep 2023 (TSMS03/04/05); Jul 2025 (TSMS05) |
+| Note | SF-30 | TSMS01 anemometer reading low |
+
+**Effect (vs. `data/archive/cleaned-backup-09292026_[BEFORE-REF-EVENTS]/`):**
+- Wind speed removed: TSMS08 465,255 readings; Adana reference 94,600.
+- Wind direction removed: TSMS01 35,760.
+- Rain newly flagged: Ankara reference 1,437,575 readings (the whole period from 6 Mar 2023); TSMS02 368,033; TSMS03/04 ≈ 91,800 each; TSMS05 133,780.
+- Nothing else changed.
+
+**Open:**
+- Downstream results (error-analysis, WMO classes, report comparison, wind roses) predate this run and need re-running.
+- Team decisions still pending: Ankara ÷10 correction vs. exclusion; remove the watering tips or keep them flagged.
+
 ## 2026-09-29: Sensor-failure figures; catalog corrections
 
 **Files:** new `scripts/plotter/plot-sensor-failures.py` (one function per failure; writes
@@ -72,14 +181,14 @@ New entries:
 
 **Downstream re-run on the regenerated `data/cleaned`:**
 - `data/error-analysis` hourly and daily statistics, and `wmo-classification.csv/.xlsx`. The previous
-  files are in `data/error-analysis/before-qc-framework/`.
+  files are in `data/archive/error-analysis-backup-09292026_[BEFORE-QC-FRAMEWORK]/`.
 - `data/report-comparison/*.csv`.
 - Wind roses in `plots/wind-roses/`.
 
 ## 2026-09-29: QC framework stage 6: Step 8 flag columns; statistical test dropped for wind
 
 **`data/cleaned` regenerated 2026-09-29 with Steps 0–8.** The previous files are in
-`data/cleaned/cleaned-backup-09292026_[BEFORE-QC-FRAMEWORK]/`. Every downstream result (error-analysis,
+`data/archive/cleaned-backup-09292026_[BEFORE-QC-FRAMEWORK]/`. Every downstream result (error-analysis,
 WMO classification, report comparison, plots) predates this and must be re-run.
 
 **Files:** `scripts/outliers/outlier-removal.py`:

@@ -14,6 +14,8 @@
 | [oscar-requirements.md](oscar-requirements.md) | Extract of WMO OSCAR/Requirements for surface variables (goal/breakthrough/threshold by application area) |
 | [figures/](figures/) | Diagnostic figures referenced by the documents above |
 
+**Running the pipeline:** everything runs from `main.py` at the repo root: `python main.py status`, `python main.py clean --label <CHANGE>`, `python main.py analyze`, `python main.py compare`, `python main.py plots --list`, `python main.py failures`, or `python main.py all --label <CHANGE>`; see `python main.py --help`. Backups of regenerated outputs go to `data/archive/`. Sensor-failure figures are in `plots/diagnostics/` (gitignored).
+
 Framing: `3D-PAWS as a Baseline Tier Observing Network.pdf` (Vision 2040 tiers). TSMS reference sensors: `TSMS Sensors.docx`.
 
 Team briefing (2026-09-28): https://claude.ai/artifact/1Q1vqMdyTmExMce5eYGEfL, built from `scripts/comparison/compare_with_report.py` output.
