@@ -1,0 +1,10 @@
+Site,Station,Sensor,In report?,N (report),N (ours),Bias (report),Bias (ours),MAE (report),MAE (ours),RMSE (report),RMSE (ours),R2 (report),R2 (ours)
+Ankara,TSMS00,BMP280 station pressure,yes (report sensor),1351439,1363156,1.028,1.041,1.123,1.136,1.328,1.396,0.975,0.969
+Ankara,TSMS01,BMP280 station pressure,yes (report sensor),893326,903882,1.21,1.215,1.214,1.219,1.329,1.333,0.989,0.988
+Ankara,TSMS02,BMP280 station pressure,yes (report sensor),1260039,1269929,1.255,1.268,1.299,1.312,1.476,1.542,0.977,0.971
+Konya,TSMS03,BMP280 station pressure,yes (report sensor),1374546,1447962,-1.133,0.4,1.595,0.58,1.783,0.793,0.916,0.981
+Konya,TSMS04,BMP280 station pressure,yes (report sensor),1374680,1448083,-2.364,-0.822,2.727,1.254,2.884,1.351,0.879,0.95
+Konya,TSMS05,BMP280 station pressure,yes (report sensor),1375160,1448749,-1.861,-0.351,2.06,0.638,2.302,0.748,0.916,0.981
+Adana,TSMS06,BMP280 station pressure,yes (report sensor),1126789,1138414,0.556,0.556,0.771,0.781,1.08,1.329,0.982,0.97
+Adana,TSMS07,BMP280 station pressure,yes (report sensor),1255723,1267986,0.107,0.104,0.665,0.663,0.829,0.827,0.985,0.985
+Adana,TSMS08,BMP280 station pressure,yes (report sensor),1251907,1261287,0.31,0.33,0.729,0.723,1.004,0.96,0.978,0.981

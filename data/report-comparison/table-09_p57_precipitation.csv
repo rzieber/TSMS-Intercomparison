@@ -1,0 +1,37 @@
+Site,Station,Reference,Wet threshold (mm/day),Days used,"Valid days, 3D-PAWS (report)","Valid days, 3D-PAWS (ours)","Wet days, 3D-PAWS (report)","Wet days, 3D-PAWS (ours)","Valid days, reference (ours)","Wet days, reference (ours)",Paired days (report),Paired days (ours),Hits (report),Hits (ours),Misses (report),Misses (ours),False alarms (report),False alarms (ours),Correct negatives (report),Correct negatives (ours),POD (report),POD (ours),FAR (report),FAR (ours),CSI (report),CSI (ours),Caveat
+Ankara,TSMS00,17130,0.2,all days (report definition),1047.0,1053,221.0,227,1075,343,1028.0,1032,87.0,195,17.0,142,133.0,31,791.0,664,0.837,0.579,0.605,0.137,0.367,0.53,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS00,17130,1.0,all days,,1053,,140,1075,301,,1032,,133,,163,,6,,730,,0.449,,0.043,,0.44,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS00,17130,0.2,flagged days excluded,,560,,63,123,22,,0,,0,,0,,0,,0,,,,,,,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS00,17130,1.0,flagged days excluded,,560,,35,123,12,,0,,0,,0,,0,,0,,,,,,,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS01,17130,0.2,all days (report definition),886.0,892,114.0,118,1075,343,868.0,872,43.0,93,33.0,176,69.0,23,723.0,580,0.566,0.346,0.616,0.198,0.297,0.318,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS01,17130,1.0,all days,,892,,67,1075,301,,872,,58,,179,,7,,628,,0.245,,0.108,,0.238,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS01,17130,0.2,flagged days excluded,,457,,77,123,22,,0,,0,,0,,0,,0,,,,,,,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS01,17130,1.0,flagged days excluded,,457,,42,123,12,,0,,0,,0,,0,,0,,,,,,,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS02,17130,0.2,all days (report definition),890.0,895,164.0,169,1075,343,873.0,876,55.0,133,37.0,152,107.0,34,674.0,557,0.598,0.467,0.66,0.204,0.276,0.417,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS02,17130,1.0,all days,,895,,96,1075,301,,876,,84,,167,,10,,615,,0.335,,0.106,,0.322,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS02,17130,0.2,flagged days excluded,,571,,121,123,22,,108,,9,,4,,1,,94,,0.692,,0.1,,0.643,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS02,17130,1.0,flagged days excluded,,571,,71,123,12,,108,,3,,4,,0,,101,,0.429,,0.0,,0.429,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Konya,TSMS03,17245,0.2,all days (report definition),973.0,1022,437.0,456,1076,232,973.0,1003,127.0,152,53.0,62,310.0,294,483.0,495,0.706,0.71,0.709,0.659,0.259,0.299,
+Konya,TSMS03,17245,1.0,all days,,1022,,135,1076,136,,1003,,91,,36,,38,,838,,0.717,,0.295,,0.552,
+Konya,TSMS03,17245,0.2,flagged days excluded,,698,,149,1001,169,,649,,98,,25,,36,,490,,0.797,,0.269,,0.616,
+Konya,TSMS03,17245,1.0,flagged days excluded,,698,,75,1001,106,,649,,65,,13,,2,,569,,0.833,,0.03,,0.812,
+Konya,TSMS04,17245,0.2,all days (report definition),939.0,1019,385.0,385,1076,232,939.0,1000,124.0,148,57.0,69,261.0,226,497.0,557,0.685,0.682,0.678,0.604,0.281,0.334,
+Konya,TSMS04,17245,1.0,all days,,1019,,139,1076,136,,1000,,88,,41,,47,,824,,0.682,,0.348,,0.5,
+Konya,TSMS04,17245,0.2,flagged days excluded,,766,,148,1001,169,,713,,100,,34,,31,,548,,0.746,,0.237,,0.606,
+Konya,TSMS04,17245,1.0,flagged days excluded,,766,,77,1001,106,,713,,65,,17,,3,,628,,0.793,,0.044,,0.765,
+Konya,TSMS05,17245,0.2,all days (report definition),938.0,1018,363.0,391,1076,232,938.0,999,142.0,169,37.0,45,221.0,215,538.0,570,0.793,0.79,0.609,0.56,0.355,0.394,
+Konya,TSMS05,17245,1.0,all days,,1018,,155,1076,136,,999,,113,,14,,37,,835,,0.89,,0.247,,0.689,
+Konya,TSMS05,17245,0.2,flagged days excluded,,748,,164,1001,169,,698,,121,,22,,23,,532,,0.846,,0.16,,0.729,
+Konya,TSMS05,17245,1.0,flagged days excluded,,748,,100,1001,106,,698,,84,,7,,1,,606,,0.923,,0.012,,0.913,
+Adana,TSMS06,17351,0.2,all days (report definition),1025.0,1032,190.0,196,1074,441,1014.0,1021,74.0,157,6.0,272,115.0,38,819.0,554,0.925,0.366,0.608,0.195,0.379,0.336,
+Adana,TSMS06,17351,1.0,all days,,1032,,130,1074,148,,1021,,110,,30,,20,,861,,0.786,,0.154,,0.688,
+Adana,TSMS06,17351,0.2,flagged days excluded,,608,,92,705,137,,426,,52,,12,,12,,350,,0.812,,0.188,,0.684,
+Adana,TSMS06,17351,1.0,flagged days excluded,,608,,56,705,85,,426,,41,,3,,1,,381,,0.932,,0.024,,0.911,
+Adana,TSMS07,17351,0.2,all days (report definition),1057.0,1064,280.0,286,1074,441,1046.0,1053,77.0,193,4.0,241,202.0,92,763.0,527,0.951,0.445,0.724,0.323,0.272,0.367,
+Adana,TSMS07,17351,1.0,all days,,1064,,148,1074,148,,1053,,106,,37,,42,,868,,0.741,,0.284,,0.573,
+Adana,TSMS07,17351,0.2,flagged days excluded,,632,,105,705,137,,448,,58,,10,,14,,366,,0.853,,0.194,,0.707,
+Adana,TSMS07,17351,1.0,flagged days excluded,,632,,65,705,85,,448,,44,,2,,1,,401,,0.957,,0.022,,0.936,
+Adana,TSMS08,17351,0.2,all days (report definition),1058.0,1042,173.0,152,1074,441,1047.0,1031,63.0,116,18.0,306,108.0,34,858.0,575,0.778,0.275,0.632,0.227,0.333,0.254,
+Adana,TSMS08,17351,1.0,all days,,1042,,98,1074,148,,1031,,75,,63,,23,,870,,0.543,,0.235,,0.466,
+Adana,TSMS08,17351,0.2,flagged days excluded,,1005,,127,705,137,,657,,70,,47,,18,,522,,0.598,,0.205,,0.519,
+Adana,TSMS08,17351,1.0,flagged days excluded,,1005,,82,705,85,,657,,53,,15,,6,,583,,0.779,,0.102,,0.716,

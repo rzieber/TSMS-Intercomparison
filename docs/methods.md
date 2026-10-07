@@ -78,6 +78,17 @@ After re-assignment, each variable's offset from the TSMS reference is consisten
 after the layout change, and Konya rainfall agrees with the reference (e.g. 44.8–50.0 mm vs.
 44.6 mm at the reference, 12 January – 10 March 2024).
 
+**Why temperature is mostly Class D (checked 2026-09-29).** The earlier analysis's temperature errors were the same size
+(MCP9808 RMSE 0.5–1.0 °C then, 0.43–0.99 °C now); what changed is the yardstick. Annex 1.G asks that 95% of 1-min
+differences fall inside ±1.0 K for Class C, and an RMSE of 0.65 K already means a 95th percentile of ≈ 1.25 K. The
+differences follow a day–night cycle, the signature of a naturally ventilated radiation shield: the median difference by
+hour runs from −0.25 to +0.55 °C (TSMS00), −0.62 to +0.60 (TSMS04) and −0.20 to +0.80 (TSMS07). The mean bias stays
+near zero, but the swing sets the tails: at TSMS07, 99% of night-time differences are within 1 K against 80% by day.
+The 3D-PAWS team's own uncertainty budget (shield + environment ≈ 0.35 K each at k = 1) puts even a calibrated unit at
+the Class C limit (1.0 K), so the result is what the shield physics predicts. Konya is worst (courtyard wall). A
+timing offset contributes little (shifting 3D-PAWS by 2 min lowers the MAE by ≈ 3%). Humidity looked better in the
+earlier analysis because its HTU21D filter compared against the reference and removed readings that disagreed.
+
 **Suggested methods text:**
 
 > For stations TSMS02–TSMS05 and TSMS08, CHORDS records from 12–16 January to 10 March 2024
@@ -103,6 +114,17 @@ detected downstream. The three temperature series for **TSMS04, 12 January 2024 
 covers about 58 days of three sensors at one of nine stations. TSMS04's other variables for the
 period (rainfall, wind, pressure, humidity) are identified with confidence and retained. The raw
 values are preserved in the raw CHORDS file.
+
+**Why temperature is mostly Class D (checked 2026-09-29).** The earlier analysis's temperature errors were the same size
+(MCP9808 RMSE 0.5–1.0 °C then, 0.43–0.99 °C now); what changed is the yardstick. Annex 1.G asks that 95% of 1-min
+differences fall inside ±1.0 K for Class C, and an RMSE of 0.65 K already means a 95th percentile of ≈ 1.25 K. The
+differences follow a day–night cycle, the signature of a naturally ventilated radiation shield: the median difference by
+hour runs from −0.25 to +0.55 °C (TSMS00), −0.62 to +0.60 (TSMS04) and −0.20 to +0.80 (TSMS07). The mean bias stays
+near zero, but the swing sets the tails: at TSMS07, 99% of night-time differences are within 1 K against 80% by day.
+The 3D-PAWS team's own uncertainty budget (shield + environment ≈ 0.35 K each at k = 1) puts even a calibrated unit at
+the Class C limit (1.0 K), so the result is what the shield physics predicts. Konya is worst (courtyard wall). A
+timing offset contributes little (shifting 3D-PAWS by 2 min lowers the MAE by ≈ 3%). Humidity looked better in the
+earlier analysis because its HTU21D filter compared against the reference and removed readings that disagreed.
 
 **Suggested methods text:**
 
@@ -137,6 +159,17 @@ The sensitivity run is tracked as potential-fixes PF-31.
   minutes only (mean; sum for precipitation; speed-weighted vector mean for wind direction), and
   a period is retained only if at least 80% of its minutes are paired. For wind variables, a
   minute counts as paired when both anemometers report a speed.
+
+**Why temperature is mostly Class D (checked 2026-09-29).** The earlier analysis's temperature errors were the same size
+(MCP9808 RMSE 0.5–1.0 °C then, 0.43–0.99 °C now); what changed is the yardstick. Annex 1.G asks that 95% of 1-min
+differences fall inside ±1.0 K for Class C, and an RMSE of 0.65 K already means a 95th percentile of ≈ 1.25 K. The
+differences follow a day–night cycle, the signature of a naturally ventilated radiation shield: the median difference by
+hour runs from −0.25 to +0.55 °C (TSMS00), −0.62 to +0.60 (TSMS04) and −0.20 to +0.80 (TSMS07). The mean bias stays
+near zero, but the swing sets the tails: at TSMS07, 99% of night-time differences are within 1 K against 80% by day.
+The 3D-PAWS team's own uncertainty budget (shield + environment ≈ 0.35 K each at k = 1) puts even a calibrated unit at
+the Class C limit (1.0 K), so the result is what the shield physics predicts. Konya is worst (courtyard wall). A
+timing offset contributes little (shifting 3D-PAWS by 2 min lowers the MAE by ≈ 3%). Humidity looked better in the
+earlier analysis because its HTU21D filter compared against the reference and removed readings that disagreed.
 
 **Suggested methods text:**
 
@@ -178,6 +211,17 @@ The reported classes are therefore conservative (lower bounds on 3D-PAWS perform
 at Konya (courtyard next to a brick wall) and Ankara (nearby hill) reflect siting and aren't
 interpreted as sensor performance. At Konya, the sheltered, weak winds make absolute errors small, so
 high classes there are an artifact.
+
+**Why temperature is mostly Class D (checked 2026-09-29).** The earlier analysis's temperature errors were the same size
+(MCP9808 RMSE 0.5–1.0 °C then, 0.43–0.99 °C now); what changed is the yardstick. Annex 1.G asks that 95% of 1-min
+differences fall inside ±1.0 K for Class C, and an RMSE of 0.65 K already means a 95th percentile of ≈ 1.25 K. The
+differences follow a day–night cycle, the signature of a naturally ventilated radiation shield: the median difference by
+hour runs from −0.25 to +0.55 °C (TSMS00), −0.62 to +0.60 (TSMS04) and −0.20 to +0.80 (TSMS07). The mean bias stays
+near zero, but the swing sets the tails: at TSMS07, 99% of night-time differences are within 1 K against 80% by day.
+The 3D-PAWS team's own uncertainty budget (shield + environment ≈ 0.35 K each at k = 1) puts even a calibrated unit at
+the Class C limit (1.0 K), so the result is what the shield physics predicts. Konya is worst (courtyard wall). A
+timing offset contributes little (shifting 3D-PAWS by 2 min lowers the MAE by ≈ 3%). Humidity looked better in the
+earlier analysis because its HTU21D filter compared against the reference and removed readings that disagreed.
 
 **Suggested methods text:**
 

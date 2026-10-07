@@ -1,0 +1,26 @@
+Test,Variable,Report criterion (Table 1),Ours (docs/qc-framework.md),method-differences.md
+Step test,Temperature,Difference > 2 °C,"Same limit, flag only; kept if a co-located instrument shows the same change (Steps 4a, 6a)","G20, G22"
+Step test,Relative humidity,Difference > 15%,"Same limit, flag only (Steps 4a, 6a); separate HTU21D bit-switching removal","G11, G20"
+Step test,Actual pressure,Difference > 0.5 mb,"Same limit, flag only (Steps 4a, 6a)",G20
+Step test,Precipitation,Difference > 5 mm,"Same limit, flag only (rain is never removed)",G20
+Step test,Wind speed,Difference > 8 m/s,"Same limit, flag only; wind flags are never removed",G20
+Step test,Wind direction,–,Not tested (same),G20
+Interval test,Temperature,−50 ≤ x ≤ 50; varies by month,Fixed instrument/physical limits; monthly climatological limits not yet implemented (report's values not given),PF-39
+Interval test,Relative humidity,0 ≤ x ≤ 105; 5 ≤ x ≤ 100,Fixed limits; stuck sensors removed as documented failures,G14
+Interval test,Actual pressure,700 ≤ x ≤ 1070; varies by month,Fixed limits,PF-39
+Interval test,Precipitation,0 ≤ x ≤ 12; x ≤ 5,Fixed limits,
+Interval test,Wind speed,0 ≤ x ≤ 100; x ≤ 17.2,Fixed limits,
+Interval test,Wind direction,0 ≤ x ≤ 360,0–360,
+Logic test,Precipitation,"When it is raining, humidity should be above 60%","Flag only (rain_low_rh), not removed",G19
+Logic test,Wind speed / direction,"When wind speed is measured, direction should be measured; when speed is 0, direction cannot be 0",Not a QC removal; in these tables direction is compared only where both anemometers read > 0,WD5
+Logic test,"Solar radiation (VIS, IR)",Measurement between sunrise and sunset,Solar radiation not analysed,
+Persistence test,Temperature,Value repeated 100 consecutive times (−50 ≤ x ≤ 50),Removed if unchanged for 3 h; plus frozen-logger test (all variables unchanged ≥ 60 min),G21
+Persistence test,Relative humidity,Value repeated 100 consecutive times (0 < x ≤ 105),Removed if unchanged for 3 h and below 80% (saturation plateaus are real),G21
+Persistence test,Actual pressure,Value repeated 100 consecutive times (700 ≤ x ≤ 1070),Removed if unchanged for 3 h,G21
+Persistence test,Precipitation,Not applicable,Not applied (same); dead gauges found by the daily neighbour check (flag),G21
+Persistence test,Wind speed,Value repeated 100 consecutive times (1 ≤ x ≤ 100),Not tested; calm runs ≥ 3 h removed when ≥ 2 other 3D-PAWS anemometers read ≥ 1.5 m/s (Step 6b),G21
+Persistence test,Wind direction,Value repeated 120 consecutive times (1 ≤ x ≤ 360),Removed if unchanged through a run with ≥ 60 min of wind ≥ 1 m/s,G21
+Persistence test,"Solar radiation (VIS, IR)",Value repeated 100 consecutive times (1 ≤ x ≤ 20000),Solar radiation not analysed,
+Statistical outliers (§4.4),All,61-point centred window; MAD score > 3.5 or |z| > 3.0; flagged values excluded,"21-min centred window, Hampel k = 3 (MAD × 1.4826) or |z| > 3 with a resolution floor; flag only, removed if no co-located instrument corroborates; not applied to wind or rain","G12, G15, G18, G22, G23"
+Spatial consistency (§4.5),All (3D-PAWS only),"Deviation from the 3D-PAWS site median > variable threshold (not given), ≥ 3 valid observations; flagged values excluded",Each instrument's deviation from its own 21-min median compared across all co-located instruments incl. the reference; confirms/clears flags,G24
+Daily completeness (§5.2),All,"≥ 1,152 of 1,440 minutes; used for daily aggregation and event analyses only",Step 7 blanks < 80% days in data/cleaned for every analysis; the parity tables restore those minutes,G3

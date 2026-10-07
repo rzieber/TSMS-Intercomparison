@@ -512,27 +512,20 @@ def rain_daily_bars(paws_name, paws_df, tsms_df):
         plt.close()
 
 
-def windrose(paws_name, paws_df, tsms_df):
-    """
-    =============================================================================================================================
-    Create wind rose plots of the 3D PAWS station data as well as the TSMS reference station. COMPLETE RECORDS
-    Hourly values are 10-min vector averages over (:50, :00]. Every hour is classified from the TSMS reference ONLY:
-        non-variable = reference 10-min mean of the unadjusted 10-m speed >= NONVARIABLE_THRESHOLD (3.0 m/s, ~6 kt)
-        variable     = below that
-    Both roses of a regime use the same hours (hours where both instruments report), so they're directly comparable.
-    Zero-speed minutes are kept: they add a zero vector, so the stale 3D-PAWS vane direction carries no weight.
-    Hours whose vector-mean speed is 0 are calm -- they have no direction, so they're counted in the legend, not drawn.
-    =============================================================================================================================
-    """
-    print(f"{paws_name}: Wind roses (all / variable / non-variable winds, classified by the reference).")
+WINDROSE_SPEED_BINS = [0, 2.0, 4.0, 6.0, 8.0, 10.0]
+WINDROSE_LABELS = ['0-2.0 m/s', '2.0-4.0 m/s', '4.0-6.0 m/s', '6.0-8.0 m/s', '8.0-10.0 m/s']
+_WR_HOURLY = {}     # paws_name -> (paws_hourly, tsms_hourly, regime_hours, regime_titles)
+_WR_SCALE = {}      # site -> (rmax, ticks), shared by every rose at the site
 
+
+def _windrose_hourly(paws_name, paws_df, tsms_df):
+    """Hourly 10-min vector averages for one station and its reference, and the hours in each regime (cached)."""
+    if paws_name in _WR_HOURLY:
+        return _WR_HOURLY[paws_name]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=FutureWarning)
-
         site = instrument_to_site[paws_name]
         top_of_hour = [51, 52, 53, 54, 55, 56, 57, 58, 59, 0]
-        wind_speed_bins = [0, 2.0, 4.0, 6.0, 8.0, 10.0]
-        labels = ['0-2.0 m/s', '2.0-4.0 m/s', '4.0-6.0 m/s', '6.0-8.0 m/s', '8.0-10.0 m/s']
 
         # 3D PAWS -----------------------------------------------------------------------------------------------------------------
         paws_wind = paws_df[['date', 'wind_speed', 'wind_dir']].copy()
@@ -552,53 +545,109 @@ def windrose(paws_name, paws_df, tsms_df):
         tsms_hourly = tsms_groups.apply(func.tsms_hourly_vectorial)
         tsms_hourly['ref_speed_10m'] = tsms_groups['avg_wind_speed'].mean()
 
-        common = paws_hourly.index.intersection(tsms_hourly.index)
-        ref_speed = tsms_hourly.loc[common, 'ref_speed_10m']
-        regime_hours = {
-            'all':          common,
-            'variable':     common[ref_speed < NONVARIABLE_THRESHOLD],
-            'nonvariable':  common[ref_speed >= NONVARIABLE_THRESHOLD],
-        }
-        regime_titles = {
-            'all':          "all winds",
-            'variable':     f"variable winds (ref. < {NONVARIABLE_THRESHOLD} m/s at 10 m)",
-            'nonvariable':  f"non-variable winds (ref. ≥ {NONVARIABLE_THRESHOLD} m/s at 10 m)",
-        }
+    common = paws_hourly.index.intersection(tsms_hourly.index)
+    ref_speed = tsms_hourly.loc[common, 'ref_speed_10m']
+    regime_hours = {
+        'all':          common,
+        'variable':     common[ref_speed < NONVARIABLE_THRESHOLD],
+        'nonvariable':  common[ref_speed >= NONVARIABLE_THRESHOLD],
+    }
+    regime_titles = {
+        'all':          "all winds",
+        'variable':     f"variable winds (ref. < {NONVARIABLE_THRESHOLD} m/s at 10 m)",
+        'nonvariable':  f"non-variable winds (ref. ≥ {NONVARIABLE_THRESHOLD} m/s at 10 m)",
+    }
+    _WR_HOURLY[paws_name] = (paws_hourly, tsms_hourly, regime_hours, regime_titles)
+    return _WR_HOURLY[paws_name]
 
-        out_dir = _dest() / "wind-roses" / paws_name
-        out_dir.mkdir(parents=True, exist_ok=True)
 
-        for regime, hours in regime_hours.items():
-            roses = [
-                (paws_hourly.loc[hours], f"{paws_name}",            out_dir / f"{paws_name}_{regime}_winds_[10-MIN-AVG].png"),
-                (tsms_hourly.loc[hours], f"TSMS Reference {site}",  out_dir / f"TSMS-Reference_{site}_{regime}_winds_[10-MIN-AVG].png"),
-            ]
-            if any((r[0]['ws_avg'] > 0).sum() == 0 for r in roses):
-                print(f"\t{regime}: no non-calm hours for one of the instruments -- skipped")
-                continue
+def _rose_table(hourly):
+    """The windrose library's own normed frequency table (% per speed bin x direction sector) for the non-calm hours."""
+    windy = hourly[hourly['ws_avg'] > 0]
+    if windy.empty:
+        return None
+    ax = WindroseAxes.from_ax()
+    ax.bar(windy['wd_avg'], windy['ws_avg'], normed=True, opening=0.8, edgecolor='white', bins=WINDROSE_SPEED_BINS)
+    table = ax._info['table']
+    plt.close(ax.figure)
+    return table
 
-            axes = []
-            for hourly, name, path in roses:
-                calm = hourly['ws_avg'] <= 0
-                windy = hourly[~calm]
-                ax = WindroseAxes.from_ax()
-                ax.bar(windy['wd_avg'], windy['ws_avg'], normed=True, opening=0.8, edgecolor='white', bins=wind_speed_bins)
-                ax.set_legend(title=f"{name} (m/s)\n{regime_titles[regime]}\n{len(hourly)} h, calm {100 * calm.mean():.1f}%", labels=labels,
-                              loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=8, title_fontsize=8)
-                axes.append((ax, path))
 
-            # same radial scale for the 3D-PAWS and TSMS roses of a regime
-            rmax = 5 * np.ceil(max(ax._info['table'].sum(axis=0).max() for ax, _ in axes) / 5)
-            ticks = np.linspace(rmax / 5, rmax, 5)
-            for ax, path in axes:
-                ax.set_rmax(rmax)
-                ax.set_yticks(ticks)
-                ax.set_yticklabels([f"{t:.0f}%" for t in ticks])
-                ax.grid(True, linewidth=0.5)
-                ax.figure.savefig(path, bbox_inches="tight")
-                plt.close(ax.figure)
+def _nice_scale(peak):
+    """Radial maximum and ring positions: the smallest 'nice' step giving at most 6 rings that covers peak (%)."""
+    for step in (1, 2, 2.5, 5, 10, 20, 25, 50):
+        n = int(np.ceil(peak / step))
+        if n <= 6:
+            rmax = max(n, 1) * step
+            return rmax, np.arange(step, rmax + step / 2, step)
+    return 100.0, np.arange(20, 101, 20)
 
-            print(f"\t{regime}: {len(hours)} hours")
+
+def _windrose_site_scale(site):
+    """One radial scale per site: covers the largest sector of every rose at the site (all three 3D-PAWS stations and
+    the reference, all / variable / non-variable winds), so every ring means the same percentage on every rose there."""
+    if site not in _WR_SCALE:
+        peak = 0.0
+        for name in [n for n in station_order if instrument_to_site[n] == site]:
+            p_df, t_df = load_station(name)
+            paws_hourly, tsms_hourly, regime_hours, _ = _windrose_hourly(name, p_df, t_df)
+            for hours in regime_hours.values():
+                for hourly in (paws_hourly.loc[hours], tsms_hourly.loc[hours]):
+                    table = _rose_table(hourly)
+                    if table is not None:
+                        peak = max(peak, table.sum(axis=0).max())
+        _WR_SCALE[site] = _nice_scale(peak)
+        print(f"	{site}: shared wind-rose scale 0–{_WR_SCALE[site][0]:g}% (largest sector {peak:.1f}%)")
+    return _WR_SCALE[site]
+
+
+def windrose(paws_name, paws_df, tsms_df):
+    """
+    =============================================================================================================================
+    Create wind rose plots of the 3D PAWS station data as well as the TSMS reference station. COMPLETE RECORDS
+    Hourly values are 10-min vector averages over (:50, :00]. Every hour is classified from the TSMS reference ONLY:
+        non-variable = reference 10-min mean of the unadjusted 10-m speed >= NONVARIABLE_THRESHOLD (3.0 m/s, ~6 kt)
+        variable     = below that
+    Both roses of a regime use the same hours (hours where both instruments report), so they're directly comparable.
+    Zero-speed minutes are kept: they add a zero vector, so the stale 3D-PAWS vane direction carries no weight.
+    Hours whose vector-mean speed is 0 are calm -- they have no direction, so they're counted in the legend, not drawn.
+    Radial rings are the same for every rose at a site (3D-PAWS and reference, all / variable / non-variable winds);
+    the legend gives N, the number of hourly values drawn.
+    =============================================================================================================================
+    """
+    print(f"{paws_name}: Wind roses (all / variable / non-variable winds, classified by the reference).")
+    site = instrument_to_site[paws_name]
+    paws_hourly, tsms_hourly, regime_hours, regime_titles = _windrose_hourly(paws_name, paws_df, tsms_df)
+    rmax, ticks = _windrose_site_scale(site)
+
+    out_dir = _dest() / "wind-roses" / paws_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for regime, hours in regime_hours.items():
+        roses = [
+            (paws_hourly.loc[hours], f"{paws_name}",            out_dir / f"{paws_name}_{regime}_winds_[10-MIN-AVG].png"),
+            (tsms_hourly.loc[hours], f"TSMS Reference {site}",  out_dir / f"TSMS-Reference_{site}_{regime}_winds_[10-MIN-AVG].png"),
+        ]
+        if any((r[0]['ws_avg'] > 0).sum() == 0 for r in roses):
+            print(f"\t{regime}: no non-calm hours for one of the instruments -- skipped")
+            continue
+
+        for hourly, name, path in roses:
+            calm = hourly['ws_avg'] <= 0
+            windy = hourly[~calm]
+            ax = WindroseAxes.from_ax()
+            ax.bar(windy['wd_avg'], windy['ws_avg'], normed=True, opening=0.8, edgecolor='white', bins=WINDROSE_SPEED_BINS)
+            ax.set_legend(title=f"{name} (m/s)\n{regime_titles[regime]}\nN = {len(windy):,} hourly values\n"
+                                f"(calm: {calm.sum():,} h, {100 * calm.mean():.1f}%, not drawn)",
+                          labels=WINDROSE_LABELS, loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=8, title_fontsize=8)
+            ax.set_rmax(rmax)
+            ax.set_yticks(ticks)
+            ax.set_yticklabels([f"{t:g}%" for t in ticks])
+            ax.grid(True, linewidth=0.5)
+            ax.figure.savefig(path, bbox_inches="tight")
+            plt.close(ax.figure)
+
+        print(f"\t{regime}: {len(hours)} hours")
 
 
 def windrose_monthly(paws_name, paws_df, tsms_df, regime="nonvariable", apply_declination=False,
@@ -1671,6 +1720,1061 @@ def diff_humidity(site):
 
 
 # =============================================================================================================================
+# REPORT-PARITY FIGURES: our data drawn the way the TSMS draft report draws its Figs 6.1-10.3
+#   -> plots/report-comparison/<Fig-...>.png   (report figure left | ours right, when the report image is available)
+#   -> plots/report-comparison/ours/<Fig-...>.png   (ours alone)
+# Report images were extracted from docs/TSMS_3D-PAWS_DATA_ANALYSIS_REPORT (2).pdf with pypdf (page.images) into
+# plots/report-comparison/report-figures/. Methods follow the report: period 1 Nov 2022 - 31 Oct 2025 (UTC), paired
+# = both values present in the same minute, daily values only from days with >= 80% (1,152) valid minutes, monthly
+# means = mean of eligible daily means, TSMS wind reduced 10 m -> 2 m with the Hellmann exponents (report §3.8).
+# Sensors: temperature mcp9808; RH sth_hum where present, else htu_hum; pressure bmp2_pres; wind wind_speed/wind_dir;
+# rain tipping. Network figures (all three sites in one figure) are drawn when the run reaches its last site.
+# =============================================================================================================================
+from matplotlib import cbook
+
+RC_START, RC_END = pd.Timestamp("2022-11-01 00:00"), pd.Timestamp("2025-10-31 23:59")
+RC_REF_COLOR = "#222222"
+RC_COLORS = ["#0072B2", "#E69F00", "#009E73"]     # first / second / third 3D-PAWS station of a site
+RC_MARKERS = ["o", "s", "^"]
+RC_REF_ID = {"Ankara": "17130", "Konya": "17245", "Adana": "17351"}
+RC_MIN_DAY = 1152                                 # 80% of 1,440 minutes
+RC_LOCAL_H = 3                                    # Türkiye local time = UTC+3 (report's diurnal x-axes)
+RC_SEASON = {12: "Winter", 1: "Winter", 2: "Winter", 3: "Spring", 4: "Spring", 5: "Spring",
+             6: "Summer", 7: "Summer", 8: "Summer", 9: "Autumn", 10: "Autumn", 11: "Autumn"}
+RC_SEASONS = ["Winter", "Spring", "Summer", "Autumn"]
+RC_ROSE_EDGES = [1, 2, 3, 5, 7, 10, 15, 20]       # report's speed classes (m/s)
+RC_ROSE_LABELS = ["0-1", "1-2", "2-3", "3-5", "5-7", "7-10", "10-15", "15-20", ">20"]
+RC_HUM_NOTE = "3D-PAWS RH: sth_hum where present, else htu_hum"
+RC_TEMP_NOTE = "3D-PAWS temperature: MCP9808 (mcp9808)"
+RC_RAIN_CAVEAT = ("CAVEAT: our Ankara TSMS reference rain file is x10 too high from 6 Mar 2023 (SF-09, docs/sensor-failures.md); "
+                  "the report used correct data. Ankara rain is plotted as is (uncorrected) and is NOT comparable with the report.")
+RC_WIND_NOTE = (f"TSMS 10-m wind speed reduced to 2 m: U2 = U10 (2/10)^a, a = 0.30 Ankara, 0.35 Konya, 0.25 Adana "
+                "(report §3.8); 3D-PAWS not adjusted")
+
+RC_FIGS = {   # id: (pdf page, file slug, site or None = whole network, report image files, stack 'h'/'v')
+    "6.1":  (20, "monthly-mean-temperature", "Ankara", ["report_p20_Im4.png"], "h"),
+    "6.2":  (21, "monthly-mean-temperature", "Adana",  ["report_p21_Im5.png"], "h"),
+    "6.3":  (22, "monthly-mean-temperature", "Konya",  ["report_p22_Im6.png"], "h"),
+    "6.4":  (23, "temperature-scatter", None, ["report_p23_Im7.png", "report_p23_Im8.png", "report_p23_Im9.png"], "h"),
+    "6.5":  (24, "temperature-difference-distribution", "Ankara", ["report_p24_Im10.png"], "h"),
+    "6.6":  (25, "temperature-difference-distribution", "Konya",  ["report_p25_Im11.png"], "h"),
+    "6.7":  (26, "temperature-difference-distribution", "Adana",  ["report_p26_Im12.png"], "h"),
+    "6.8":  (27, "temperature-taylor-diagrams", None, ["report_p27_Im13.png"], "h"),
+    "6.9":  (28, "diurnal-temperature", None, ["report_p28_Im14.png", "report_p28_Im15.png", "report_p28_Im16.png"], "v"),
+    "6.10": (29, "temperature-difference-boxplots", None, ["report_p29_Im17.png"], "h"),
+    "7.1":  (32, "monthly-mean-humidity", "Ankara", ["report_p32_Im18.png"], "h"),
+    "7.2":  (33, "monthly-mean-humidity", "Konya",  ["report_p33_Im19.png"], "h"),
+    "7.3":  (34, "monthly-mean-humidity", "Adana",  ["report_p34_Im20.png"], "h"),
+    "7.4":  (35, "humidity-scatter", None, ["report_p35_Im21.png", "report_p35_Im22.png", "report_p35_Im23.png"], "h"),
+    "7.5":  (36, "diurnal-median-humidity", None, ["report_p36_Im24.png"], "h"),
+    "8.1":  (39, "daily-pressure-regression", None, ["report_p39_Im25.png", "report_p39_Im26.png", "report_p39_Im27.png"], "h"),
+    "8.2":  (40, "pressure-difference-boxplots", None, ["report_p40_Im28.png"], "h"),
+    "8.3":  (41, "diurnal-pressure-bias", None, ["report_p41_Im29.png"], "h"),
+    "8.4":  (42, "pressure-bias-vs-temperature", None, ["report_p42_Im30.png"], "h"),
+    "8.5":  (43, "pressure-bland-altman", None, ["report_p43_Im31.png"], "h"),
+    "8.6":  (44, "seasonal-pressure-bias", None, ["report_p44_Im32.png"], "h"),
+    "8.7":  (45, "pressure-abs-error-cdf", None, ["report_p45_Im33.png"], "h"),
+    "9.1":  (48, "wind-roses", "Ankara", ["report_p48_Im34.png"], "h"),
+    "9.2":  (49, "wind-roses", "Konya",  ["report_p49_Im35.png"], "h"),
+    "9.3":  (50, "wind-roses", "Adana",  ["report_p50_Im36.png"], "h"),
+    "9.4":  (51, "seasonal-wind-speed", None, ["report_p51_Im37.png"], "h"),
+    "9.5":  (52, "diurnal-wind-speed", None, ["report_p52_Im38.png"], "h"),
+    "9.6":  (53, "seasonal-wind-speed-bias", None, ["report_p53_Im39.png"], "h"),
+    "9.7":  (54, "wind-speed-scatter", None, ["report_p54_Im40.png"], "h"),
+    "10.1": (61, "monthly-precipitation-totals", None, ["report_p61_Im41.png"], "h"),
+    "10.2": (62, "monthly-precipitation-scatter", None, ["report_p62_Im42.png"], "h"),
+    "10.3": (63, "precipitation-pod-far-csi", None, ["report_p63_Im43.png"], "h"),
+}
+
+_RC_MIN = {}                  # site -> (station short names, {key: minute DataFrame}); one site held at a time
+_RC_NET = {}                  # figure id -> {site: summary} for whole-network figures
+_RUN_SITES = list(ALL_SITES)  # set by run(): the sites of the current run
+
+
+def _rc_short(paws_name):
+    return paws_name.split("_")[1]
+
+
+def _rc_ref_label(site):
+    return f"TSMS {RC_REF_ID[site]} (ref)"
+
+
+def _rc_grab(df, cols, idx):
+    d = df[['date'] + [c for c in cols if c in df.columns]]
+    d = d[(d['date'] >= RC_START) & (d['date'] <= RC_END)]
+    d = d.drop_duplicates('date', keep='first').set_index('date').reindex(idx)
+    for c in cols:
+        if c not in d.columns:
+            d[c] = np.nan
+    return d.astype('float32')
+
+
+def _rc_minutes(site):
+    """Minute grid (study period) for the site: frames['ref'] and frames['TSMS0n'] with T, RH, P, WS, WD, R
+    (+ WS10 for the reference; WS = Hellmann-reduced 2-m speed)."""
+    if site in _RC_MIN:
+        return _RC_MIN[site]
+    _RC_MIN.clear()
+    members, ref = load_site(site)
+    idx = pd.date_range(RC_START, RC_END, freq='min')
+    r = _rc_grab(ref, ['temperature', 'humidity', 'actual_pressure', 'avg_wind_speed', 'avg_wind_dir', 'total_rainfall'], idx)
+    frames = {'ref': pd.DataFrame({'T': r['temperature'], 'RH': r['humidity'], 'P': r['actual_pressure'],
+                                   'WS10': r['avg_wind_speed'], 'WD': r['avg_wind_dir'], 'R': r['total_rainfall']}, index=idx)}
+    frames['ref']['WS'] = frames['ref']['WS10'] * np.float32((h2 / h1) ** hellman_exponents[site])
+    names = []
+    for name, df in members:
+        s = _rc_short(name)
+        names.append(s)
+        d = _rc_grab(df, ['mcp9808', 'sth_hum', 'htu_hum', 'bmp2_pres', 'wind_speed', 'wind_dir', 'tipping'], idx)
+        frames[s] = pd.DataFrame({'T': d['mcp9808'], 'RH': d['sth_hum'].fillna(d['htu_hum']), 'P': d['bmp2_pres'],
+                                  'WS': d['wind_speed'], 'WD': d['wind_dir'], 'R': d['tipping']}, index=idx)
+    _RC_MIN[site] = (names, frames)
+    return names, frames
+
+
+def _rc_daily(s, how="mean"):
+    """Daily mean (or sum) from days with >= 80% valid minutes."""
+    g = s.resample('D')
+    v = g.mean() if how == "mean" else g.sum()
+    return v[g.count() >= RC_MIN_DAY]
+
+
+def _rc_pair(ref, st):
+    m = ref.notna() & st.notna()
+    return ref[m], st[m]
+
+
+def _rc_fit(x, y):
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    if len(x) < 3:
+        return dict(n=len(x), r=np.nan, r2=np.nan, slope=np.nan, icpt=np.nan, bias=np.nan)
+    slope, icpt = np.polyfit(x, y, 1)
+    r = np.corrcoef(x, y)[0, 1]
+    return dict(n=len(x), r=r, r2=r * r, slope=slope, icpt=icpt, bias=float(np.mean(y - x)))
+
+
+def _rc_bstats(d, label, fliers=True, cap=20000):
+    st = cbook.boxplot_stats(np.asarray(d, float), whis=1.5)[0]
+    st['label'] = label
+    f = st['fliers']
+    if not fliers:
+        st['fliers'] = np.array([])
+    elif len(f) > cap:   # draw a random subset of the fliers (plus the extremes); stats use every value
+        keep = np.random.default_rng(0).choice(len(f), cap, replace=False)
+        st['fliers'] = np.concatenate([f[keep], [f.min(), f.max()]])
+    return st
+
+
+def _rc_style(ax):
+    ax.grid(True, color='#e3e3e3', lw=0.6)
+    ax.set_axisbelow(True)
+    for s in ('top', 'right'):
+        ax.spines[s].set_visible(False)
+
+
+def _rc_note(fig, text, y=0.005):
+    fig.text(0.5, y, text, ha='center', va='bottom', fontsize=9, color='#555555', wrap=True)
+
+
+def _rc_dir():
+    return _dest() / "report-comparison"
+
+
+def _rc_compose(report_paths, how, ours_path, out_path, left_label):
+    """Side-by-side PNG: report figure (left) | ours (right), same height, labels on top."""
+    from PIL import Image
+    ims = [Image.open(p).convert('RGB') for p in report_paths]
+    if len(ims) > 1:
+        if how == 'h':
+            h = min(i.height for i in ims)
+            ims = [i.resize((round(i.width * h / i.height), h), Image.LANCZOS) for i in ims]
+            rep = Image.new('RGB', (sum(i.width for i in ims), h), 'white')
+            x = 0
+            for i in ims:
+                rep.paste(i, (x, 0)); x += i.width
+        else:
+            w = min(i.width for i in ims)
+            ims = [i.resize((w, round(i.height * w / i.width)), Image.LANCZOS) for i in ims]
+            rep = Image.new('RGB', (w, sum(i.height for i in ims)), 'white')
+            y = 0
+            for i in ims:
+                rep.paste(i, (0, y)); y += i.height
+    else:
+        rep = ims[0]
+    our = Image.open(ours_path).convert('RGB')
+    H = min(1600, max(our.height, 900))
+    rep = rep.resize((round(rep.width * H / rep.height), H), Image.LANCZOS)
+    our = our.resize((round(our.width * H / our.height), H), Image.LANCZOS)
+    gap, band = 50, 80
+    W, TH = rep.width + gap + our.width, H + band
+    fig = plt.figure(figsize=(W / 100, TH / 100), dpi=100, facecolor='white')
+    for x0, img, lab in [(0, rep, left_label), (rep.width + gap, our, "Ours")]:
+        ax = fig.add_axes([x0 / W, 0, img.width / W, H / TH])
+        ax.imshow(np.asarray(img), interpolation='none')
+        ax.axis('off')
+        fig.text((x0 + img.width / 2) / W, 1 - band / 2 / TH, lab, ha='center', va='center', fontsize=26, weight='bold',
+                 color=RC_REF_COLOR)
+    fig.add_artist(plt.Line2D([(rep.width + gap / 2) / W] * 2, [0.02, 0.98], color='#999999', lw=2))
+    _save(out_path, fig, dpi=100)
+    plt.close(fig)
+
+
+def _rc_save(fig, fid, site=None):
+    page, slug, fsite, imgs, how = RC_FIGS[fid]
+    name = f"Fig-{fid}_p{page}_{slug}" + (f"_{site}" if site else "") + ".png"
+    ours = _rc_dir() / "ours" / name
+    _save(ours, fig, dpi=130, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    paths = [_root("plots/report-comparison/report-figures") / f for f in imgs]
+    out = _rc_dir() / name
+    if paths and all(p.exists() for p in paths):
+        _rc_compose(paths, how, ours, out, f"TSMS report, Fig {fid}, p. {page}")
+    else:
+        print(f"\tNOTE: report image for Fig {fid} not found -- writing ours alone")
+        import shutil
+        shutil.copyfile(ours, out)
+    print("\tsaved", out)
+
+
+def _rc_site_only(site, fid):
+    want = RC_FIGS[fid][2]
+    if site != want:
+        print(f"\tFig {fid} is the {want} figure -- nothing to do for {site}")
+        return False
+    return True
+
+
+def _rc_network(fid, site, summarize, draw):
+    """Summaries per site; draw once the run's last site is reached (loading any site the run skipped)."""
+    store = _RC_NET.setdefault(fid, {})
+    store[site] = summarize(site)
+    run_sites = [s for s in ALL_SITES if s in _RUN_SITES]
+    if run_sites and site != run_sites[-1]:
+        return
+    for s in ALL_SITES:
+        if s not in store:
+            store[s] = summarize(s)
+            _RC_MIN.pop(s, None)
+            _evict([n for n in station_order if instrument_to_site[n] == s] + [f"TSMS_Reference_{s}"])
+    draw({s: store[s] for s in ALL_SITES})
+    _RC_NET.pop(fid, None)
+
+
+def _rc_series_list(site, names, with_ref=True):
+    out = [('ref', _rc_ref_label(site), RC_REF_COLOR)] if with_ref else []
+    return out + [(n, n, c) for n, c in zip(names, RC_COLORS)]
+
+
+# ---- Monthly means (Figs 6.1-6.3, 7.1-7.3) ----------------------------------------------------------------------------------
+def _rc_monthly(site, fid, var, what, unit, ylim, note):
+    names, F = _rc_minutes(site)
+    months = pd.date_range(RC_START, RC_END, freq='MS')
+    fig, ax = plt.subplots(figsize=(15, 5.8))
+    for key, lab, col in _rc_series_list(site, names):
+        d = _rc_daily(F[key][var])
+        m = d.resample('MS').mean().reindex(months)
+        ax.plot(months, m.values, color=col, lw=2.2 if key == 'ref' else 1.6, marker='o', ms=3.5,
+                label=f"{lab}  N = {len(d):,} eligible days", zorder=3 if key == 'ref' else 2)
+    ax.set_xticks(months)
+    ax.set_xticklabels([m.strftime('%Y-%m') for m in months], rotation=45, ha='right', fontsize=8)
+    ax.set_xlim(months[0] - pd.Timedelta(days=12), months[-1] + pd.Timedelta(days=12))
+    if ylim:
+        ax.set_ylim(*ylim)
+    ax.set_ylabel(unit)
+    _rc_style(ax)
+    ax.set_title(f"Monthly mean {what} - {site} (mean of eligible daily means; day eligible if >= 80% of minutes valid)",
+                 fontsize=12, weight='bold')
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.2), ncol=4, fontsize=9, frameon=False)
+    _rc_note(fig, note + ". Each series uses its own eligible days (not paired), as in the report.", y=-0.06)
+    _rc_save(fig, fid, site)
+
+
+# ---- Daily-mean scatter + regression (Figs 6.4, 7.4, 8.1) --------------------------------------------------------------------
+def _rc_daily_pairs(site, var):
+    names, F = _rc_minutes(site)
+    r = _rc_daily(F['ref'][var])
+    out = {}
+    for n in names:
+        j = pd.concat([r, _rc_daily(F[n][var])], axis=1, join='inner').dropna()
+        out[n] = (j.iloc[:, 0].to_numpy(float), j.iloc[:, 1].to_numpy(float))
+    return names, out
+
+
+def _rc_draw_scatter(fid, data, what, unit, title, note, eq=False, pad=1.0):
+    fig, axes = plt.subplots(1, 3, figsize=(19, 6.9))
+    for ax, site in zip(axes, ALL_SITES):
+        names, pairs = data[site]
+        lo, hi = np.inf, -np.inf
+        for n, c, mk in zip(names, RC_COLORS, RC_MARKERS):
+            x, y = pairs[n]
+            if len(x) < 3:
+                continue
+            st = _rc_fit(x, y)
+            lo, hi = min(lo, x.min(), y.min()), max(hi, x.max(), y.max())
+            ax.scatter(x, y, s=10, marker=mk, color=c, alpha=0.45, edgecolors='none', rasterized=True)
+            xx = np.array([x.min(), x.max()])
+            lab = f"{n}: R² = {st['r2']:.3f}, N = {st['n']:,} days"
+            if eq:
+                lab += f"\n      fit y = {st['slope']:.3f}x {st['icpt']:+.1f}"
+            ax.plot(xx, st['slope'] * xx + st['icpt'], color=c, lw=1.8, label=lab)
+        lo, hi = lo - pad, hi + pad
+        ax.plot([lo, hi], [lo, hi], color=RC_REF_COLOR, ls='--', lw=1.2, label='1:1')
+        ax.set_xlim(lo, hi); ax.set_ylim(lo, hi); ax.set_aspect('equal')
+        ax.set_title(f"{site} (TSMS {RC_REF_ID[site]})", fontsize=12, weight='bold')
+        ax.set_xlabel(f"TSMS daily mean {what} ({unit})")
+        ax.set_ylabel(f"3D-PAWS daily mean {what} ({unit})")
+        _rc_style(ax)
+        ax.legend(loc='upper left', fontsize=8.5, framealpha=0.9)
+    fig.suptitle(title, fontsize=14, weight='bold')
+    _rc_note(fig, note + ". Paired eligible days (both >= 80% valid minutes); R² from paired daily means.", y=-0.02)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.95))
+    _rc_save(fig, fid)
+
+
+# ---- Difference-distribution boxplots (Figs 6.10, 8.2) ------------------------------------------------------------------------
+def _rc_diff_box_summary(site, var):
+    names, F = _rc_minutes(site)
+    out = []
+    for n in names:
+        r, s = _rc_pair(F['ref'][var], F[n][var])
+        d = (s - r).to_numpy(float)
+        out.append(_rc_bstats(d, f"{n}\nN = {len(d):,} min"))
+    return out
+
+
+def _rc_draw_diff_box(fid, data, what, unit, ylim, title, note):
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6.4), sharey=True)
+    for ax, site in zip(axes, ALL_SITES):
+        stats = data[site]
+        b = ax.bxp(stats, positions=[0, 1, 2], widths=0.6, patch_artist=True, showfliers=True,
+                   flierprops=dict(marker='.', ms=2, alpha=0.3, mec='none', mfc='#555555'),
+                   medianprops=dict(color='#111111', lw=1.5))
+        for patch, c in zip(b['boxes'], RC_COLORS):
+            patch.set_facecolor(c); patch.set_alpha(0.85)
+        for fl in b['fliers']:
+            fl.set_rasterized(True)
+        ax.axhline(0, color=RC_REF_COLOR, ls='--', lw=1)
+        ax.set_ylim(*ylim)
+        ax.set_title(f"{site}\n(TSMS {RC_REF_ID[site]})", fontsize=12, weight='bold')
+        _rc_style(ax)
+        ax.tick_params(axis='x', labelsize=9)
+    axes[0].set_ylabel(f"{what} difference, 3D-PAWS - TSMS ({unit})")
+    fig.suptitle(title, fontsize=14, weight='bold')
+    _rc_note(fig, note + ". Paired 1-min values. Box = IQR, line = median, whiskers = 1.5 IQR, dots = outliers "
+             "(at most 20,000 drawn per station); y-axis clipped as in the report.", y=-0.01)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+    _rc_save(fig, fid)
+
+
+# ---- Figs 6.1-6.3 -------------------------------------------------------------------------------------------------------------
+def _rc_temp_monthly(fid):
+    def f(site):
+        """Report Fig. {fid}: monthly mean air temperature, reference + 3 stations (MCP9808)."""
+        if _rc_site_only(site, fid):
+            _rc_monthly(site, fid, 'T', 'air temperature', '°C', (-10, 35), RC_TEMP_NOTE)
+    return f
+
+
+report_fig_6_1, report_fig_6_2, report_fig_6_3 = (_rc_temp_monthly(i) for i in ("6.1", "6.2", "6.3"))
+
+
+def report_fig_6_4(site):
+    """Report Fig. 6.4: temperature scatter vs reference, daily means, regression + 1:1, three sites."""
+    _rc_network("6.4", site, lambda s: _rc_daily_pairs(s, 'T'),
+                lambda d: _rc_draw_scatter("6.4", d, "temperature", "°C", "Air temperature: 3D-PAWS vs TSMS", RC_TEMP_NOTE))
+
+
+def _rc_temp_hist(fid):
+    def f(site):
+        """Report Figs. 6.5-6.7: distribution of 1-min temperature differences at one site, with a stats table."""
+        if not _rc_site_only(site, fid):
+            return
+        names, F = _rc_minutes(site)
+        fig = plt.figure(figsize=(13, 8.6))
+        ax = fig.add_axes([0.08, 0.34, 0.9, 0.56])
+        tax = fig.add_axes([0.08, 0.03, 0.9, 0.2]); tax.axis('off')
+        bins = np.arange(-5, 5.0001, 0.1)
+        rows = []
+        for n, c in zip(names, RC_COLORS):
+            r, s = _rc_pair(F['ref']['T'], F[n]['T'])
+            d = (s - r).to_numpy(float)
+            ax.hist(d, bins=bins, density=True, histtype='stepfilled', alpha=0.15, color=c)
+            ax.hist(d, bins=bins, density=True, histtype='step', lw=1.8, color=c, label=f"{n}  (N = {len(d):,} paired min)")
+            q1, q3 = np.percentile(d, [25, 75])
+            rows.append([n, f"{len(d):,}", f"{d.mean():.2f}", f"{np.median(d):.2f}", f"{d.std():.2f}", f"{q3 - q1:.2f}"])
+        ax.axvline(0, color=RC_REF_COLOR, ls='--', lw=1.4, label='Perfect agreement')
+        ax.set_xlabel("Temperature difference, 3D-PAWS - TSMS (°C)"); ax.set_ylabel("Density")
+        ax.set_xlim(-5, 5)
+        _rc_style(ax)
+        ax.legend(loc='upper right', fontsize=9)
+        ax.set_title(f"{site} temperature difference distribution (3D-PAWS MCP9808 - TSMS {RC_REF_ID[site]}), 1-min pairs",
+                     fontsize=12, weight='bold')
+        tab = tax.table(cellText=rows, colLabels=['Station', 'N (paired min)', 'Mean (°C)', 'Median (°C)', 'STD (°C)', 'IQR (°C)'],
+                        loc='center', cellLoc='center')
+        tab.auto_set_font_size(False); tab.set_fontsize(10); tab.scale(1, 1.6)
+        _rc_note(fig, "Histogram bins 0.1 °C (report: histogram + density line; bin width not stated). Stats use every pair.", y=0.0)
+        _rc_save(fig, fid, site)
+    return f
+
+
+report_fig_6_5, report_fig_6_6, report_fig_6_7 = (_rc_temp_hist(i) for i in ("6.5", "6.6", "6.7"))
+
+
+def _rc_taylor_summary(site):
+    names, F = _rc_minutes(site)
+    out = []
+    for n in names:
+        r, s = _rc_pair(F['ref']['T'], F[n]['T'])
+        a, b = r.to_numpy(float), s.to_numpy(float)
+        sr, ss = a.std(), b.std()
+        cor = np.corrcoef(a, b)[0, 1]
+        crmsd = np.sqrt(np.mean(((b - b.mean()) - (a - a.mean())) ** 2))
+        out.append(dict(name=n, n=len(a), sd_ref=sr, sd=ss, ratio=ss / sr, r=cor, crmsd=crmsd / sr))
+    return out
+
+
+def _rc_taylor_axes(ax, rmin, rmax, tmax_deg, cticks, levels):
+    ax.set_thetamin(0); ax.set_thetamax(tmax_deg)
+    ax.set_rlim(rmin, rmax)
+    ax.set_thetagrids(np.degrees(np.arccos(cticks)), labels=[f"{c:g}" for c in cticks], fontsize=8)
+    t = np.linspace(0, np.radians(tmax_deg), 300); rr = np.linspace(rmin, rmax, 300)
+    T, R = np.meshgrid(t, rr)
+    D = np.sqrt(R ** 2 + 1 - 2 * R * np.cos(T))
+    cs = ax.contour(T, R, D, levels=levels, colors='#7a9a7a', linestyles='--', linewidths=0.7)
+    ax.clabel(cs, fmt='%g', fontsize=7)
+    ax.plot(t, np.ones_like(t), color=RC_REF_COLOR, lw=1.2)
+    ax.plot([0], [1], marker='*', ms=15, color=RC_REF_COLOR, ls='none', label='TSMS reference')
+
+
+def _rc_taylor_zoom(ax, stats):
+    """Cartesian zoom of the Taylor plane around the reference point (x = SD ratio * r, y = SD ratio * sin(acos r))."""
+    x0, x1, y1 = 0.94, 1.08, 0.11
+    t = np.linspace(0, np.pi / 2, 400)
+    for lev in (0.02, 0.05, 0.1):
+        ax.plot(1 + lev * np.cos(t * 2), lev * np.sin(t * 2), color='#7a9a7a', ls='--', lw=0.7)
+        ax.text(1 + lev * np.cos(1.9), lev * np.sin(1.9), f"{lev:g}", color='#7a9a7a', fontsize=7)
+    for c in (0.99, 0.995, 0.998, 0.999):
+        a = np.arccos(c)
+        ax.plot([0, 2 * np.cos(a)], [0, 2 * np.sin(a)], color='#bbbbbb', lw=0.7)
+        if x1 * np.tan(a) <= y1:
+            ax.text(x1, x1 * np.tan(a), f" r={c:g}", fontsize=7, va='center', color='#555555', clip_on=False)
+    ax.plot(np.cos(t), np.sin(t), color=RC_REF_COLOR, lw=1.2)
+    ax.plot([1], [0], marker='*', ms=15, color=RC_REF_COLOR, ls='none')
+    for st, c, mk in zip(stats, RC_COLORS, RC_MARKERS):
+        a = np.arccos(min(st['r'], 1))
+        ax.plot([st['ratio'] * np.cos(a)], [st['ratio'] * np.sin(a)], marker=mk, ms=10, color=c, mec='white', ls='none')
+    ax.set_xlim(x0, x1); ax.set_ylim(0, y1); ax.set_aspect('equal')
+    ax.set_xlabel("SD ratio x r"); ax.set_ylabel("SD ratio x sin(acos r)")
+    _rc_style(ax)
+
+
+def report_fig_6_8(site):
+    """Report Fig. 6.8: temperature Taylor diagrams per site (normalised by the reference SD), plus a zoom."""
+    def draw(data):
+        fig = plt.figure(figsize=(19, 13))
+        for i, s in enumerate(ALL_SITES):
+            stats = data[s]
+            ax = fig.add_axes([0.03 + i * 0.33, 0.47, 0.27, 0.43], projection='polar')
+            _rc_taylor_axes(ax, 0, 1.5, 90, [0, 0.2, 0.4, 0.6, 0.8, 0.9, 0.95, 0.99, 1], [0.25, 0.5, 0.75, 1.0])
+            for st, c, mk in zip(stats, RC_COLORS, RC_MARKERS):
+                lab = f"{st['name']}: r = {st['r']:.4f}, SD ratio = {st['ratio']:.3f}, cRMSD = {st['crmsd']:.3f}, N = {st['n']:,}"
+                ax.plot([np.arccos(min(st['r'], 1))], [st['ratio']], marker=mk, ms=10, color=c, mec='white', ls='none', label=lab)
+            ax.set_title(f"{s} temperature Taylor diagram", fontsize=12, weight='bold', pad=16)
+            ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), fontsize=8.5, frameon=False)
+            az = fig.add_axes([0.05 + i * 0.33, 0.07, 0.25, 0.22])
+            _rc_taylor_zoom(az, stats)
+            az.set_title(f"{s}: zoom around the reference point", fontsize=10)
+        fig.suptitle("Taylor diagrams: air temperature, 3D-PAWS (MCP9808) vs TSMS, 1-min pairs\n"
+                     "angle = correlation, radius = SD / SD(ref), dashed = centred RMSD / SD(ref)", fontsize=13, weight='bold')
+        _rc_note(fig, "Normalised by each pair's reference SD (the report plots absolute SD in °C).", y=0.0)
+        _rc_save(fig, "6.8")
+    _rc_network("6.8", site, _rc_taylor_summary, draw)
+
+
+def _rc_diurnal_summary(site, var, stat='mean', local=True, with_ref=True):
+    names, F = _rc_minutes(site)
+    out = []
+    for key, lab, col in _rc_series_list(site, names, with_ref):
+        s = F[key][var].dropna()
+        hrs = (s.index + pd.Timedelta(hours=RC_LOCAL_H if local else 0)).hour
+        g = s.groupby(hrs)
+        out.append((lab, col, (g.mean() if stat == 'mean' else g.median()).reindex(range(24)), len(s)))
+    return out
+
+
+def report_fig_6_9(site):
+    """Report Fig. 6.9: mean diurnal temperature cycle per site, local time (UTC+3) as in the report's axes."""
+    def draw(data):
+        fig, axes = plt.subplots(3, 1, figsize=(12, 15))
+        for ax, s in zip(axes, ALL_SITES):
+            for lab, col, v, n in data[s]:
+                ax.plot(v.index, v.values, color=col, lw=2.2 if 'ref' in lab else 1.8, marker='o', ms=3,
+                        label=f"{lab}  N = {n:,} min")
+            ax.set_xticks(range(24)); ax.set_xlabel("Local hour (UTC+3)"); ax.set_ylabel("Temperature (°C)")
+            ax.set_title(f"{s} diurnal temperature cycle", fontsize=12, weight='bold')
+            _rc_style(ax); ax.legend(fontsize=9)
+        fig.suptitle("Mean diurnal air temperature (3D-PAWS MCP9808 and TSMS)", fontsize=14, weight='bold')
+        _rc_note(fig, "Hourly means of each series' own valid 1-min values (not paired). Local time as on the report's axis; "
+                 "report §3.6 says diurnal analyses use UTC.", y=0.0)
+        fig.tight_layout(rect=(0, 0.02, 1, 0.97))
+        _rc_save(fig, "6.9")
+    _rc_network("6.9", site, lambda s: _rc_diurnal_summary(s, 'T'), draw)
+
+
+def report_fig_6_10(site):
+    """Report Fig. 6.10: boxplots of 1-min temperature differences, all sites."""
+    _rc_network("6.10", site, lambda s: _rc_diff_box_summary(s, 'T'),
+                lambda d: _rc_draw_diff_box("6.10", d, "Temperature", "°C", (-6, 6),
+                                            "Temperature difference distribution (3D-PAWS - TSMS)", RC_TEMP_NOTE))
+
+
+# ---- Figs 7.x -----------------------------------------------------------------------------------------------------------------
+def _rc_hum_monthly(fid):
+    def f(site):
+        """Report Figs. 7.1-7.3: monthly mean relative humidity, reference + 3 stations."""
+        if _rc_site_only(site, fid):
+            _rc_monthly(site, fid, 'RH', 'relative humidity', 'RH (%)', (0, 100), RC_HUM_NOTE)
+    return f
+
+
+report_fig_7_1, report_fig_7_2, report_fig_7_3 = (_rc_hum_monthly(i) for i in ("7.1", "7.2", "7.3"))
+
+
+def report_fig_7_4(site):
+    """Report Fig. 7.4: RH scatter vs reference, daily means, regression + 1:1, three sites."""
+    _rc_network("7.4", site, lambda s: _rc_daily_pairs(s, 'RH'),
+                lambda d: _rc_draw_scatter("7.4", d, "RH", "%", "Relative humidity: 3D-PAWS vs TSMS", RC_HUM_NOTE, pad=2))
+
+
+def report_fig_7_5(site):
+    """Report Fig. 7.5: median diurnal RH of the 3D-PAWS stations (no reference, as in the report), UTC hours."""
+    def draw(data):
+        fig, axes = plt.subplots(1, 3, figsize=(19, 6.2), sharey=True)
+        for ax, s in zip(axes, ALL_SITES):
+            for lab, col, v, n in data[s]:
+                ax.plot(v.index, v.values, color=col, lw=1.8, marker='o', ms=3.5, label=f"{lab}  N = {n:,} min")
+            ax.set_title(f"{s} median diurnal relative humidity", fontsize=12, weight='bold')
+            ax.set_xticks(range(0, 24, 3)); ax.set_xlabel("Hour (UTC)")
+            _rc_style(ax); ax.legend(fontsize=9)
+        axes[0].set_ylabel("Median relative humidity (%)")
+        fig.suptitle("Median diurnal relative humidity at the 3D-PAWS stations", fontsize=14, weight='bold')
+        _rc_note(fig, RC_HUM_NOTE + ". Median of each station's own valid 1-min values per hour (not paired); "
+                 "hour axis taken as UTC (report axis unlabelled; §3.6 says UTC). No reference line, as in the report.", y=-0.02)
+        fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+        _rc_save(fig, "7.5")
+    _rc_network("7.5", site, lambda s: _rc_diurnal_summary(s, 'RH', stat='median', local=False, with_ref=False), draw)
+
+
+# ---- Figs 8.x -----------------------------------------------------------------------------------------------------------------
+RC_PRES_NOTE = "3D-PAWS pressure: bmp2_pres; TSMS: actual_pressure (station pressure)"
+
+
+def report_fig_8_1(site):
+    """Report Fig. 8.1: daily pressure regression vs reference, three sites."""
+    _rc_network("8.1", site, lambda s: _rc_daily_pairs(s, 'P'),
+                lambda d: _rc_draw_scatter("8.1", d, "pressure", "hPa", "Daily station pressure: 3D-PAWS vs TSMS",
+                                           RC_PRES_NOTE, eq=True, pad=1))
+
+
+def report_fig_8_2(site):
+    """Report Fig. 8.2: boxplots of 1-min pressure differences, all sites."""
+    _rc_network("8.2", site, lambda s: _rc_diff_box_summary(s, 'P'),
+                lambda d: _rc_draw_diff_box("8.2", d, "Pressure", "hPa", (-5, 5),
+                                            "Pressure bias distribution (3D-PAWS - TSMS)", RC_PRES_NOTE))
+
+
+def _rc_pdiff(site):
+    names, F = _rc_minutes(site)
+    out = {}
+    for n in names:
+        r, s = _rc_pair(F['ref']['P'], F[n]['P'])
+        out[n] = (s - r).astype(float)
+    return names, F, out
+
+
+def _rc_draw_lines3(fid, data, title, xlabel, ylabel, note, band=True, xticks=None):
+    fig, axes = plt.subplots(1, 3, figsize=(19, 6.4), sharey=True)
+    for ax, s in zip(axes, ALL_SITES):
+        for lab, col, x, m, sd, n in data[s]:
+            ax.plot(x, m, color=col, lw=2, marker='o', ms=3.5, label=f"{lab}  N = {n:,} paired min")
+            if band:
+                ax.fill_between(x, m - sd, m + sd, color=col, alpha=0.15, lw=0)
+        ax.axhline(0, color=RC_REF_COLOR, ls='--', lw=1)
+        ax.set_title(f"{s}\n(TSMS {RC_REF_ID[s]})", fontsize=12, weight='bold')
+        ax.set_xlabel(xlabel)
+        if xticks is not None:
+            ax.set_xticks(xticks)
+        _rc_style(ax); ax.legend(fontsize=8.5, loc='best')
+    axes[0].set_ylabel(ylabel)
+    fig.suptitle(title, fontsize=14, weight='bold')
+    _rc_note(fig, note, y=-0.02)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+    _rc_save(fig, fid)
+
+
+def report_fig_8_3(site):
+    """Report Fig. 8.3: hourly mean pressure bias +/- 1 SD, local time (UTC+3)."""
+    def summ(s):
+        names, F, D = _rc_pdiff(s)
+        out = []
+        for n, c in zip(names, RC_COLORS):
+            d = D[n]
+            g = d.groupby((d.index + pd.Timedelta(hours=RC_LOCAL_H)).hour)
+            out.append((n, c, np.arange(24), g.mean().reindex(range(24)).values, g.std().reindex(range(24)).values, len(d)))
+        return out
+    _rc_network("8.3", site, summ, lambda d: _rc_draw_lines3(
+        "8.3", d, "Diurnal pressure bias (hourly mean of 3D-PAWS - TSMS)", "Local time (UTC+3)", "Mean pressure bias (hPa)",
+        RC_PRES_NOTE + ". Shaded = +/-1 SD within each hour. Local time as on the report's axis (report §3.6 says UTC).",
+        xticks=range(0, 24, 2)))
+
+
+def report_fig_8_4(site):
+    """Report Fig. 8.4: mean pressure bias in 1 °C bins of TSMS air temperature."""
+    def summ(s):
+        names, F, D = _rc_pdiff(s)
+        out = []
+        for n, c in zip(names, RC_COLORS):
+            d = D[n]
+            t = F['ref']['T'].reindex(d.index)
+            m = t.notna()
+            d, t = d[m], t[m]
+            g = d.groupby(np.floor(t.to_numpy(float)))
+            agg = pd.DataFrame({'m': g.mean(), 'sd': g.std(), 'n': g.size()})
+            agg = agg[agg['n'] >= 60]
+            out.append((n, c, agg.index.to_numpy() + 0.5, agg['m'].values, agg['sd'].values, len(d)))
+        return out
+    _rc_network("8.4", site, summ, lambda d: _rc_draw_lines3(
+        "8.4", d, "Pressure bias vs TSMS air temperature (1 °C bins)", "TSMS air temperature (°C)", "Mean pressure bias (hPa)",
+        RC_PRES_NOTE + ". Point = mean bias in a 1 °C bin of the reference temperature (bins with >= 60 paired minutes); "
+        "shaded = +/-1 SD."))
+
+
+def report_fig_8_5(site):
+    """Report Fig. 8.5: Bland-Altman plots of 1-min pressure, three sites."""
+    def summ(s):
+        names, F, D = _rc_pdiff(s)
+        out, alld = [], []
+        rng = np.random.default_rng(0)
+        for n, c in zip(names, RC_COLORS):
+            d = D[n]
+            mean = ((F[n]['P'].reindex(d.index) + F['ref']['P'].reindex(d.index)) / 2).to_numpy(float)
+            dv = d.to_numpy(float)
+            k = rng.choice(len(dv), min(len(dv), 40000), replace=False)
+            out.append((n, c, mean[k], dv[k], dv.mean(), dv.std(), len(dv)))
+            alld.append(dv)
+        a = np.concatenate(alld)
+        return out, (a.mean(), a.std(), len(a))
+
+    def draw(data):
+        fig, axes = plt.subplots(1, 3, figsize=(19, 6.6))
+        for ax, s in zip(axes, ALL_SITES):
+            rows, (pm, psd, pn) = data[s]
+            for n, c, x, y, m, sd, N in rows:
+                ax.scatter(x, y, s=3, color=c, alpha=0.25, edgecolors='none', rasterized=True)
+                ax.axhline(m, color=c, lw=1.8, label=f"{n}: bias {m:+.2f}, LoA {m - 1.96 * sd:+.2f} / {m + 1.96 * sd:+.2f} hPa, N = {N:,}")
+                ax.axhline(m - 1.96 * sd, color=c, lw=1, ls='--'); ax.axhline(m + 1.96 * sd, color=c, lw=1, ls='--')
+            ax.text(0.02, 0.98, f"All stations: mean bias = {pm:.2f} hPa\nUpper LoA = {pm + 1.96 * psd:.2f} hPa\n"
+                    f"Lower LoA = {pm - 1.96 * psd:.2f} hPa\nN = {pn:,} paired min", transform=ax.transAxes, va='top',
+                    fontsize=9, bbox=dict(boxstyle='round', fc='white', ec='#999999'))
+            ax.set_title(f"{s}\n(TSMS {RC_REF_ID[s]})", fontsize=12, weight='bold')
+            ax.set_xlabel("Mean pressure, (3D-PAWS + TSMS)/2 (hPa)")
+            _rc_style(ax); ax.legend(fontsize=7.5, loc='lower right')
+        axes[0].set_ylabel("Pressure bias, 3D-PAWS - TSMS (hPa)")
+        fig.suptitle("Bland-Altman analysis of pressure", fontsize=14, weight='bold')
+        _rc_note(fig, RC_PRES_NOTE + ". Solid = mean bias, dashed = 95% limits of agreement (mean +/- 1.96 SD), from all pairs; "
+                 "40,000 random pairs per station drawn.", y=-0.02)
+        fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+        _rc_save(fig, "8.5")
+    _rc_network("8.5", site, summ, draw)
+
+
+def _rc_seasonal_box(fid, data, title, ylabel, note, fliers, zero=True):
+    """data[site] = (series labels, colours, {season: [bstats per series]})."""
+    fig, axes = plt.subplots(1, 3, figsize=(19, 6.6), sharey=True)
+    ylims = []
+    for ax, s in zip(axes, ALL_SITES):
+        labels, colors, by_season = data[s]
+        k = len(labels)
+        w = 0.8 / k
+        for i, season in enumerate(RC_SEASONS):
+            stats = by_season[season]
+            pos = [i - 0.4 + w * (j + 0.5) for j in range(k)]
+            b = ax.bxp(stats, positions=pos, widths=w * 0.85, patch_artist=True, showfliers=fliers,
+                       flierprops=dict(marker='.', ms=2, alpha=0.3, mec='none', mfc='#555555'),
+                       medianprops=dict(color='#111111', lw=1.4))
+            for patch, c in zip(b['boxes'], colors):
+                patch.set_facecolor(c); patch.set_alpha(0.85)
+            for fl in b['fliers']:
+                fl.set_rasterized(True)
+        ax.set_xticks(range(4)); ax.set_xticklabels(RC_SEASONS)
+        allst = [st for se in RC_SEASONS for st in by_season[se] if np.isfinite(st['whislo'])]
+        lo_all = min(st['whislo'] for st in allst); hi_all = max(st['whishi'] for st in allst)
+        pad = 0.08 * (hi_all - lo_all)
+        ylims.append((lo_all - pad, hi_all + pad))
+        if zero:
+            ax.axhline(0, color=RC_REF_COLOR, ls='--', lw=1)
+        ax.set_title(f"{s}\n(TSMS {RC_REF_ID[s]})", fontsize=12, weight='bold')
+        _rc_style(ax)
+        n_tot = {lab: sum(by_season[se][j]['n'] for se in RC_SEASONS) for j, lab in enumerate(labels)}
+        handles = [plt.Rectangle((0, 0), 1, 1, fc=c, alpha=0.85) for c in colors]
+        ax.legend(handles, [f"{lab}  N = {n_tot[lab]:,}" for lab in labels], fontsize=8.5, loc='best')
+    axes[0].set_ylabel(ylabel)
+    axes[0].set_ylim(min(l for l, _ in ylims), max(h for _, h in ylims))   # whisker range; far outliers fall off-axis
+    fig.suptitle(title, fontsize=14, weight='bold')
+    _rc_note(fig, note, y=-0.02)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+    _rc_save(fig, fid)
+
+
+def _rc_bstats_n(d, label, fliers):
+    st = _rc_bstats(d, label, fliers)
+    st['n'] = len(d)
+    return st
+
+
+def report_fig_8_6(site):
+    """Report Fig. 8.6: seasonal boxplots of 1-min pressure bias (DJF/MAM/JJA/SON)."""
+    def summ(s):
+        names, F, D = _rc_pdiff(s)
+        by = {}
+        for se in RC_SEASONS:
+            by[se] = []
+            for n in names:
+                d = D[n]
+                v = d[d.index.month.map(RC_SEASON) == se].to_numpy(float)
+                by[se].append(_rc_bstats_n(v, '', True))
+        return names, RC_COLORS, by
+    def draw(data):
+        _rc_seasonal_box("8.6", data, "Seasonal distribution of pressure bias (3D-PAWS - TSMS)", "Pressure bias (hPa)",
+                         RC_PRES_NOTE + ". Paired 1-min values; N = paired minutes. Winter = DJF ... Autumn = SON. Whiskers 1.5 IQR, "
+                         "dots = outliers (<= 20,000 drawn). y-axis spans all whiskers (the report clips at +/-2 hPa, hiding most Konya boxes); "
+                         "outliers beyond it are off-axis.", True)
+    _rc_network("8.6", site, summ, draw)
+
+
+def report_fig_8_7(site):
+    """Report Fig. 8.7: CDF of absolute 1-min pressure error, with threshold table."""
+    grid = np.linspace(0, 2, 801)
+    thr = [0.1, 0.3, 0.5, 1.0]
+
+    def summ(s):
+        names, F, D = _rc_pdiff(s)
+        out = []
+        for n, c in zip(names, RC_COLORS):
+            a = np.sort(np.abs(D[n].to_numpy(float)))
+            cdf = np.searchsorted(a, grid, side='right') / len(a) * 100
+            pct = [np.searchsorted(a, t + 1e-9, side='right') / len(a) * 100 for t in thr]
+            out.append((n, c, cdf, pct, len(a)))
+        return out
+
+    def draw(data):
+        fig = plt.figure(figsize=(19, 9.2))
+        for i, s in enumerate(ALL_SITES):
+            ax = fig.add_axes([0.05 + i * 0.32, 0.36, 0.27, 0.53])
+            tax = fig.add_axes([0.05 + i * 0.32, 0.06, 0.27, 0.2]); tax.axis('off')
+            rows = []
+            for n, c, cdf, pct, N in data[s]:
+                ax.plot(grid, cdf, color=c, lw=2, label=f"{n}  N = {N:,} paired min")
+                rows.append([n] + [f"{p:.1f}%" for p in pct])
+            for t in thr:
+                ax.axvline(t, color='#999999', ls='--', lw=0.8)
+            ax.set_xlim(0, 2); ax.set_ylim(0, 100)
+            ax.set_xlabel("Absolute pressure error |3D-PAWS - TSMS| (hPa)")
+            if i == 0:
+                ax.set_ylabel("Cumulative probability (%)")
+            ax.set_title(f"{s}\n(TSMS {RC_REF_ID[s]})", fontsize=12, weight='bold')
+            _rc_style(ax); ax.legend(fontsize=8.5, loc='lower right')
+            tab = tax.table(cellText=rows, colLabels=['Station'] + [f"<= {t} hPa" for t in thr], loc='center', cellLoc='center')
+            tab.auto_set_font_size(False); tab.set_fontsize(9.5); tab.scale(1, 1.6)
+        fig.suptitle("Cumulative distribution of absolute pressure error", fontsize=14, weight='bold', y=0.98)
+        _rc_note(fig, RC_PRES_NOTE + ". Empirical CDF of every paired 1-min value (report: PCHIP-interpolated curves; "
+                 "thresholds from the original observations, as here).", y=0.0)
+        _rc_save(fig, "8.7")
+    _rc_network("8.7", site, summ, draw)
+
+
+# ---- Figs 9.x -----------------------------------------------------------------------------------------------------------------
+def _rc_rose_table(ws, wd):
+    m = ws.notna() & wd.notna()
+    ws, wd = ws[m].to_numpy(float), wd[m].to_numpy(float) % 360
+    sec = (((wd + 11.25) % 360) // 22.5).astype(int) % 16
+    cls = np.digitize(ws, RC_ROSE_EDGES)
+    tab = np.zeros((16, len(RC_ROSE_LABELS)))
+    np.add.at(tab, (sec, cls), 1)
+    return tab / max(len(ws), 1) * 100, len(ws)
+
+
+def _rc_windrose(fid):
+    def f(site):
+        """Report Figs. 9.1-9.3: wind roses of the reference (2-m adjusted speed) and the three stations, 1-min values."""
+        if not _rc_site_only(site, fid):
+            return
+        names, F = _rc_minutes(site)
+        panels = [(f"TSMS {RC_REF_ID[site]} (ref, speed reduced to 2 m)", 'ref')] + [(n, n) for n in names]
+        tabs = [(t, *_rc_rose_table(F[k]['WS'], F[k]['WD'])) for t, k in panels]
+        rmax = max(tab.sum(axis=1).max() for _, tab, _ in tabs) * 1.05
+        cmap = plt.get_cmap('YlGnBu')
+        cols = [cmap(v) for v in np.linspace(0.2, 1.0, len(RC_ROSE_LABELS))]
+        theta = np.radians(np.arange(16) * 22.5)
+        fig = plt.figure(figsize=(12, 13.5))
+        for i, (title, tab, n) in enumerate(tabs):
+            ax = fig.add_subplot(2, 2, i + 1, projection='polar')
+            ax.set_theta_zero_location('N'); ax.set_theta_direction(-1)
+            bottom = np.zeros(16)
+            for k in range(len(RC_ROSE_LABELS)):
+                ax.bar(theta, tab[:, k], width=np.radians(22.5) * 0.92, bottom=bottom, color=cols[k], edgecolor='white', lw=0.4)
+                bottom += tab[:, k]
+            ax.set_ylim(0, rmax)
+            ax.set_xticks(theta)
+            ax.set_xticklabels(['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'],
+                               fontsize=8)
+            ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:g}%"))
+            ax.tick_params(axis='y', labelsize=7)
+            ax.set_title(f"{title}\nN = {n:,} min", fontsize=11, weight='bold', pad=14)
+        handles = [plt.Rectangle((0, 0), 1, 1, fc=c) for c in cols]
+        fig.legend(handles, [f"{l} m/s" for l in RC_ROSE_LABELS], loc='lower center', ncol=9, fontsize=9, frameon=False,
+                   bbox_to_anchor=(0.5, 0.025))
+        fig.suptitle(f"Wind rose comparison - {site}", fontsize=15, weight='bold')
+        _rc_note(fig, RC_WIND_NOTE + ".\nFrequency (%) of each series' own valid 1-min speed+direction values; 16 sectors; "
+                 "one radial scale for all four roses (the report scales each rose separately).", y=0.0)
+        fig.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.1, hspace=0.38, wspace=0.3)
+        _rc_save(fig, fid, site)
+    return f
+
+
+report_fig_9_1, report_fig_9_2, report_fig_9_3 = (_rc_windrose(i) for i in ("9.1", "9.2", "9.3"))
+
+
+def report_fig_9_4(site):
+    """Report Fig. 9.4: seasonal boxplots of wind speed (reference at 2 m + 3 stations), no outliers."""
+    def summ(s):
+        names, F = _rc_minutes(s)
+        ser = _rc_series_list(s, names)
+        by = {}
+        for se in RC_SEASONS:
+            by[se] = []
+            for key, lab, col in ser:
+                v = F[key]['WS'].dropna()
+                by[se].append(_rc_bstats_n(v[v.index.month.map(RC_SEASON) == se].to_numpy(float), '', False))
+        return [lab for _, lab, _ in ser], [col for _, _, col in ser], by
+    _rc_network("9.4", site, summ, lambda d: _rc_seasonal_box(
+        "9.4", d, "Seasonal distribution of wind speed", "Wind speed at 2 m (m/s)",
+        RC_WIND_NOTE + ". Each series' own valid 1-min values (N = minutes); outliers omitted, as in the report.", False, zero=False))
+
+
+def report_fig_9_5(site):
+    """Report Fig. 9.5: mean diurnal wind speed (reference at 2 m + 3 stations), local time (UTC+3)."""
+    def draw(data):
+        fig, axes = plt.subplots(1, 3, figsize=(19, 6.4), sharey=True)
+        for ax, s in zip(axes, ALL_SITES):
+            for lab, col, v, n in data[s]:
+                ax.plot(v.index, v.values, color=col, lw=2.2 if 'ref' in lab else 1.8, marker='o', ms=3.5, label=f"{lab}  N = {n:,} min")
+            ax.set_title(s, fontsize=12, weight='bold')
+            ax.set_xticks(range(0, 24, 3)); ax.set_xlabel("Local time (UTC+3)")
+            ax.set_ylim(bottom=0)
+            _rc_style(ax); ax.legend(fontsize=8.5)
+        axes[0].set_ylabel("Mean wind speed at 2 m (m/s)")
+        fig.suptitle("Diurnal cycle of wind speed", fontsize=14, weight='bold')
+        _rc_note(fig, RC_WIND_NOTE + ". Hourly means of each series' own valid 1-min values (not paired). Local time as on "
+                 "the report's axis (report §3.6 says UTC).", y=-0.02)
+        fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+        _rc_save(fig, "9.5")
+    _rc_network("9.5", site, lambda s: _rc_diurnal_summary(s, 'WS'), draw)
+
+
+def report_fig_9_6(site):
+    """Report Fig. 9.6: seasonal boxplots of paired 1-min wind speed bias, no outliers."""
+    def summ(s):
+        names, F = _rc_minutes(s)
+        by = {se: [] for se in RC_SEASONS}
+        for n in names:
+            r, st = _rc_pair(F['ref']['WS'], F[n]['WS'])
+            d = st - r
+            season = d.index.month.map(RC_SEASON)
+            for se in RC_SEASONS:
+                by[se].append(_rc_bstats_n(d[season == se].to_numpy(float), '', False))
+        return names, RC_COLORS, by
+    _rc_network("9.6", site, summ, lambda d: _rc_seasonal_box(
+        "9.6", d, "Seasonal distribution of wind speed bias (3D-PAWS - TSMS at 2 m)", "Wind speed bias (m/s)",
+        RC_WIND_NOTE + ". Paired 1-min values (N = paired minutes); outliers omitted, as in the report.", False))
+
+
+def report_fig_9_7(site):
+    """Report Fig. 9.7: 1-min wind speed scatter vs the 2-m-adjusted reference, regression + 1:1."""
+    def summ(s):
+        names, F = _rc_minutes(s)
+        rng = np.random.default_rng(0)
+        out = []
+        for n, c in zip(names, RC_COLORS):
+            r, st = _rc_pair(F['ref']['WS'], F[n]['WS'])
+            x, y = r.to_numpy(float), st.to_numpy(float)
+            k = rng.choice(len(x), min(len(x), 30000), replace=False)
+            out.append((n, c, x[k], y[k], _rc_fit(x, y)))
+        return out
+
+    def draw(data):
+        fig, axes = plt.subplots(1, 3, figsize=(19, 6.8), sharey=True)
+        for ax, s in zip(axes, ALL_SITES):
+            for n, c, x, y, st in data[s]:
+                ax.scatter(x, y, s=4, color=c, alpha=0.2, edgecolors='none', rasterized=True)
+                xx = np.array([0, 5])
+                ax.plot(xx, st['slope'] * xx + st['icpt'], color=c, lw=2,
+                        label=f"{n}: R² = {st['r2']:.3f}, bias {st['bias']:+.2f} m/s, N = {st['n']:,}")
+            ax.plot([0, 5], [0, 5], color=RC_REF_COLOR, ls='--', lw=1.2, label='1:1')
+            ax.set_xlim(0, 5); ax.set_ylim(0, 5); ax.set_aspect('equal')
+            ax.set_title(s, fontsize=12, weight='bold'); ax.set_xlabel("TSMS wind speed at 2 m (m/s)")
+            _rc_style(ax); ax.legend(fontsize=8, loc='upper left')
+        axes[0].set_ylabel("3D-PAWS wind speed at 2 m (m/s)")
+        fig.suptitle("Comparison of wind speed measurements", fontsize=14, weight='bold')
+        _rc_note(fig, RC_WIND_NOTE + ". Paired 1-min values; fit and R² from all pairs (N), 30,000 random pairs per station drawn.",
+                 y=-0.02)
+        fig.tight_layout(rect=(0, 0.04, 1, 0.94))
+        _rc_save(fig, "9.7")
+    _rc_network("9.7", site, summ, draw)
+
+
+# ---- Figs 10.x ----------------------------------------------------------------------------------------------------------------
+def report_fig_10_1(site):
+    """Report Fig. 10.1: monthly precipitation totals (sum of eligible daily totals), reference + 3 stations."""
+    months = pd.date_range(RC_START, RC_END, freq='MS')
+
+    def summ(s):
+        names, F = _rc_minutes(s)
+        out = []
+        for key, lab, col in _rc_series_list(s, names):
+            d = _rc_daily(F[key]['R'], 'sum')
+            out.append((lab, col, d.resample('MS').sum(min_count=1).reindex(months), len(d)))
+        return out
+
+    def draw(data):
+        fig, axes = plt.subplots(3, 1, figsize=(18, 13.5))
+        x = np.arange(len(months))
+        for ax, s in zip(axes, ALL_SITES):
+            allv = np.concatenate([m.dropna().values for _, _, m, _ in data[s]])
+            nz = allv[allv > 0]
+            top = min(allv.max(), 3 * np.percentile(nz, 95)) * 1.1 if len(nz) else 1
+            for j, (lab, col, m, n) in enumerate(data[s]):
+                v = m.fillna(0).values
+                ax.bar(x - 0.3 + 0.2 * j, v, width=0.2, color=col, label=f"{lab}  N = {n:,} eligible days")
+                for xi in np.where(v > top)[0]:   # bars cut by the axis: print their value
+                    ax.text(x[xi] - 0.3 + 0.2 * j, top * 0.97, f"{lab.split()[0] if lab.startswith('TSMS0') else 'ref'}\n{v[xi]:,.0f} mm",
+                            ha='center', va='top', fontsize=7.5, color=RC_REF_COLOR,
+                            bbox=dict(boxstyle='round,pad=0.2', fc='white', ec=col, lw=0.8))
+            ax.set_ylim(0, top)
+            ax.set_xticks(x[::3]); ax.set_xticklabels([m.strftime('%b\n%Y') for m in months[::3]], fontsize=9)
+            ax.set_xlim(-0.6, len(months) - 0.4)
+            ax.set_ylabel("Monthly precipitation (mm)")
+            ax.set_title(s + ("  (reference x10 from Mar 2023 - see caveat)" if s == "Ankara" else ""), loc='left',
+                         fontsize=12, weight='bold')
+            _rc_style(ax); ax.legend(fontsize=8.5, ncol=4, loc='upper right')
+        fig.suptitle("Monthly precipitation totals at TSMS reference and 3D-PAWS stations", fontsize=14, weight='bold')
+        _rc_note(fig, "Sum of daily totals from eligible days (>= 80% valid minutes), each series separately; months without an "
+                 "eligible day shown as 0. Bars taller than the axis are cut and labelled with their value.\n" + RC_RAIN_CAVEAT, y=0.0)
+        fig.tight_layout(rect=(0, 0.045, 1, 0.97))
+        _rc_save(fig, "10.1")
+    _rc_network("10.1", site, summ, draw)
+
+
+def _rc_rain_paired_days(site):
+    names, F = _rc_minutes(site)
+    r = _rc_daily(F['ref']['R'], 'sum')
+    out = {}
+    for n in names:
+        j = pd.concat([r, _rc_daily(F[n]['R'], 'sum')], axis=1, join='inner').dropna()
+        j.columns = ['ref', 'st']
+        out[n] = j
+    return names, out
+
+
+def report_fig_10_2(site):
+    """Report Fig. 10.2: monthly precipitation totals, 3D-PAWS vs reference, regression, R² and bias."""
+    def summ(s):
+        names, P = _rc_rain_paired_days(s)
+        out = []
+        for n, c in zip(names, RC_COLORS):
+            m = P[n].resample('MS').sum()
+            m = m[P[n]['ref'].resample('MS').count() > 0]
+            out.append((n, c, m['ref'].to_numpy(float), m['st'].to_numpy(float)))
+        return out
+
+    def draw(data):
+        fig, axes = plt.subplots(1, 3, figsize=(19, 6.9))
+        for ax, s in zip(axes, ALL_SITES):
+            hi = 1
+            for n, c, x, y in data[s]:
+                st = _rc_fit(x, y)
+                hi = max(hi, x.max() if len(x) else 0, y.max() if len(y) else 0)
+                ax.scatter(x, y, s=30, color=c, alpha=0.75, edgecolors='white', lw=0.5)
+                xx = np.array([0, hi * 1.1])
+                ax.plot(xx, st['slope'] * xx + st['icpt'], color=c, lw=1.5,
+                        label=f"{n}: R² = {st['r2']:.2f}, bias = {st['bias']:+.1f} mm, N = {st['n']} months")
+            allv = np.concatenate([np.concatenate([x, y]) for _, _, x, y in data[s]])
+            nz = allv[allv > 0]
+            hi = min(hi, 3 * np.percentile(nz, 95)) * 1.05 if len(nz) else hi * 1.05
+            off = [(n, xv, yv) for n, _, x, y in data[s] for xv, yv in zip(x, y) if xv > hi or yv > hi]
+            if off:
+                ax.text(0.98, 0.02, "Off-axis: " + "; ".join(f"{n} ({xv:,.0f}, {yv:,.0f} mm)" for n, xv, yv in off),
+                        transform=ax.transAxes, ha='right', va='bottom', fontsize=8, color=RC_REF_COLOR,
+                        bbox=dict(boxstyle='round', fc='white', ec='#999999'))
+            ax.plot([0, hi], [0, hi], color=RC_REF_COLOR, ls='--', lw=1.2, label='1:1')
+            ax.set_xlim(0, hi); ax.set_ylim(0, hi); ax.set_aspect('equal')
+            ax.set_title(s + (" (reference x10 - not comparable)" if s == "Ankara" else ""), fontsize=12, weight='bold')
+            ax.set_xlabel("TSMS reference (mm/month)"); ax.set_ylabel("3D-PAWS (mm/month)")
+            _rc_style(ax); ax.legend(fontsize=8, loc='upper left')
+        fig.suptitle("Monthly precipitation: TSMS reference vs 3D-PAWS", fontsize=14, weight='bold')
+        _rc_note(fig, "Monthly sums over days eligible (>= 80% valid minutes) at both the station and the reference; bias = mean "
+                 "monthly (3D-PAWS - TSMS).\n" + RC_RAIN_CAVEAT, y=-0.04)
+        fig.tight_layout(rect=(0, 0.05, 1, 0.94))
+        _rc_save(fig, "10.2")
+    _rc_network("10.2", site, summ, draw)
+
+
+def report_fig_10_3(site):
+    """Report Fig. 10.3: daily precipitation event detection (POD, FAR, CSI), wet day >= 0.2 mm, paired eligible days."""
+    def summ(s):
+        names, P = _rc_rain_paired_days(s)
+        out = []
+        for n, c in zip(names, RC_COLORS):
+            rw, sw = P[n]['ref'] >= 0.2, P[n]['st'] >= 0.2
+            H, M, FA, CN = int((rw & sw).sum()), int((rw & ~sw).sum()), int((~rw & sw).sum()), int((~rw & ~sw).sum())
+            pod = H / (H + M) if H + M else np.nan
+            far = FA / (H + FA) if H + FA else np.nan
+            csi = H / (H + M + FA) if H + M + FA else np.nan
+            out.append((n, c, [pod, far, csi], (H, M, FA, CN), len(P[n])))
+        return out
+
+    def draw(data):
+        fig, axes = plt.subplots(3, 1, figsize=(14, 12.5))
+        metrics = ["POD (higher better)", "FAR (lower better)", "CSI (higher better)"]
+        for ax, s in zip(axes, ALL_SITES):
+            for j, (n, c, vals, (H, M, FA, CN), N) in enumerate(data[s]):
+                x = np.arange(3) - 0.27 + 0.27 * j
+                bars = ax.bar(x, vals, width=0.25, color=c,
+                              label=f"{n}: N = {N:,} paired days (H {H}, M {M}, FA {FA}, CN {CN})")
+                for b, v in zip(bars, vals):
+                    ax.text(b.get_x() + b.get_width() / 2, v + 0.02, f"{v:.3f}", ha='center', va='bottom', fontsize=8.5,
+                            color=RC_REF_COLOR)
+            ax.set_xticks(range(3)); ax.set_xticklabels(metrics)
+            ax.set_ylim(0, 1.12); ax.set_ylabel("Score")
+            ax.set_title(f"{s} (TSMS {RC_REF_ID[s]})" + ("  - reference rain x10 from Mar 2023, see caveat" if s == "Ankara" else ""),
+                         loc='left', fontsize=12, weight='bold')
+            _rc_style(ax); ax.legend(fontsize=8.5, loc='upper right', bbox_to_anchor=(1.0, 1.0))
+        fig.suptitle("Daily precipitation event detection performance", fontsize=14, weight='bold')
+        _rc_note(fig, "Wet day = daily total >= 0.2 mm; days with >= 80% valid minutes at both station and reference. "
+                 "POD = H/(H+M), FAR = FA/(H+FA), CSI = H/(H+M+FA).\n" + RC_RAIN_CAVEAT, y=0.0)
+        fig.tight_layout(rect=(0, 0.05, 1, 0.97))
+        _rc_save(fig, "10.3")
+    _rc_network("10.3", site, summ, draw)
+
+
+RC_PLOTS = {f"report-fig-{fid}": (globals()[f"report_fig_{fid.replace('.', '_')}"], "site-wide",
+                                  f"TSMS report Fig {fid} (p. {v[0]}) redrawn with our data"
+                                  + (f" [{v[2]} only]" if v[2] else " [all sites; drawn after the last site]")
+                                  + f" -> report-comparison/")
+            for fid, v in RC_FIGS.items()}
+
+
+# =============================================================================================================================
 # Registry + CLI
 # =============================================================================================================================
 STATION, SITE = "per-station", "site-wide"
@@ -1697,6 +2801,7 @@ PLOTS = {   # name: (function, scope, one-line description)
     "diff-temperature":       (diff_temperature,        SITE,    "per site daily-mean difference per temperature sensor, SHT-upgrade line -> time-series/<site>/temperature/differences/"),
     "diff-humidity":          (diff_humidity,           SITE,    "per site daily-mean difference per humidity sensor, SHT-upgrade line -> time-series/<site>/humidity/differences/"),
 }
+PLOTS.update(RC_PLOTS)   # report-fig-6.1 ... report-fig-10.3 (TSMS draft report parity figures)
 
 
 def _resolve_station(s):
@@ -1718,7 +2823,7 @@ def _resolve_site(s):
 def run(plots=None, stations=None, sites=None, out=None):
     """Run the named plots. stations: names or short ids (TSMS00); sites: Ankara/Konya/Adana; out: output root.
     Returns a list of (plot, target, error-or-None)."""
-    global data_destination
+    global data_destination, _RUN_SITES
     plots = list(plots) if plots else list(DEFAULT_PLOTS)
     unknown = [p for p in plots if p not in PLOTS]
     if unknown:
@@ -1728,6 +2833,7 @@ def run(plots=None, stations=None, sites=None, out=None):
 
     station_list = [_resolve_station(s) for s in stations] if stations else list(station_order)
     site_list = [_resolve_site(s) for s in sites] if sites else list(ALL_SITES)
+    _RUN_SITES = list(site_list)   # whole-network report figures draw after the last of these
     per_station = [p for p in plots if PLOTS[p][1] == STATION]
     site_wide = [p for p in plots if PLOTS[p][1] == SITE]
 
@@ -1757,6 +2863,8 @@ def run(plots=None, stations=None, sites=None, out=None):
             for name in site_wide:
                 call(name, site, site)
         _evict([s for s in station_order if instrument_to_site[s] == site] + [f"TSMS_Reference_{site}"])
+        for n in [s for s in station_order if instrument_to_site[s] == site]:
+            _WR_HOURLY.pop(n, None)
 
     failed = [r for r in results if r[2]]
     print(f"\nDone: {len(results) - len(failed)} ok, {len(failed)} failed")

@@ -1,0 +1,12 @@
+Check,Report table(s),Result,Detail
+"Table 3 % × 1,096 days gives whole days",3,OK,all 48 cells
+Table 2 minute % is possible given Table 3 day %,"2, 3",OK,all 48 cells
+§5.1 text range for temperature matches Table 2,2,OK,text 80.94–98.62%; Table 2 80.94–98.62%
+§5.1 text range for RH matches Table 2,2,OK,text 62.87–91.99%; Table 2 62.87–91.99%
+§5.1 text range for pressure matches Table 2,2,OK,text 57.03–98.83%; Table 2 57.03–98.83%
+§5.1 text range for wind speed matches Table 2,2,OK,text 52.77–99.28%; Table 2 52.77–99.28%
+Paired N (Tables 4–7) ≤ lower of station and reference completeness (Table 2),"2, 4, 6, 6, 7",OK,all 36 cells
+Table 9 counts sum to paired days; POD/FAR/CSI recompute; wet/valid days ≥ paired subset,9,OK,all 9 stations
+Table 9 implied reference wet days (H + M),9,note,"TSMS00: 104 of 1028; TSMS01: 76 of 868; TSMS02: 92 of 873; TSMS03: 180 of 973; TSMS04: 181 of 939; TSMS05: 179 of 938; TSMS06: 80 of 1014; TSMS07: 81 of 1046; TSMS08: 81 of 1047. Konya: Valid Days = Paired Days at all three stations, i.e. the reference was valid on every day the 3D-PAWS station was."
+Table numbering,"5, 6",FAIL,There is no Table 5; 'Table 6' is used for both relative humidity (PDF p.30) and atmospheric pressure (PDF p.38). Humidity should presumably be Table 5.
+Humidity sensor label,"1, 6 (RH)",note,"Table 1 names HTU21D_RH; TSMS03–08 report SHT31D values under that CHORDS label after the Jan 2024 upgrade, so the report's RH mixes two sensors (ours: 'active sensor')."

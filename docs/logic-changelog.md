@@ -9,6 +9,75 @@ effect on results, and anything left open.
 
 ---
 
+
+## 2026-09-29: Report-parity figures (every figure in the TSMS report, side by side with ours)
+
+**Files:** `scripts/plotter/plot-gen-final.py` (new `report_fig_*` functions, registered as `report-fig-6.1` …
+`report-fig-10.3`); `plots/report-comparison/` (side-by-sides, `ours/`, extracted `report-figures/`, README).
+
+**Before (what was wrong):** we compared only the report's Tables 4 and 6–9. Its 32 figures had no counterpart,
+so differences in method or data (e.g. the Konya reference) couldn't be seen.
+
+**Change:**
+- Each figure is recomputed with the report's period, sensors (MCP9808; SHT31D else HTU21D; BMP280) and wind height
+  treatment (Hellmann to 2 m).
+- It's shown next to the report's own image, which pypdf extracted from the PDF. N is in every legend.
+- Method choices the report doesn't state are listed per figure in the README: daily aggregation for the scatters,
+  local time for the diurnal plots, our own eligible-day rule for monthly means.
+
+**What it showed:**
+- Ankara and Adana reproduce closely.
+- **The report's Konya reference in Fig 6.3 is 1–2 °C colder than the Konya reference file we received**, while
+  its 3D-PAWS lines match ours. This is the likely source of the report's Konya bias (G17, TSMS question 1).
+- Seven internal inconsistencies in the report, listed in the README and the companion deck. Among them:
+  - Fig 10.1 vs 10.2 reference rain differs about 10×;
+  - the diurnal plots are in local time although §3.6 says UTC;
+  - the Konya reference wind looks unadjusted to 2 m.
+
+## 2026-09-29: Report parity tables (one per report table) in `compare_with_report.py`
+
+**Files:** `scripts/comparison/compare_with_report.py`; outputs `data/report-comparison/table-*.csv`,
+`figure-10-2_p62_monthly-precipitation.csv`, `report-consistency-checks.csv`, `report-parity-tables.xlsx`.
+Backup of the previous outputs: `data/archive/report-comparison-backup-09292026_[BEFORE-PARITY-TABLES]/`.
+
+- **Before:** side-by-side only for Tables 4, 6, 6, 7, 8, 9, report sensor only, on `data/cleaned` as written
+  (after our Step 7, which blanks every < 80% day). No completeness tables (Tables 2, 3), no Table 1,
+  no Table 9 valid/wet days or report contingency counts.
+- **Change:** new parity tables for Tables 1, 2, 3, 4, 6 (RH), 6 (pressure), 7, 8, 9 and Fig. 10.2 (text
+  values), every 3D-PAWS sensor as its own row/column, report values beside ours. Minute-level values are
+  "QC-valid": `data/cleaned` plus the minutes Step 7 removed only for daily completeness (restored from
+  `*_outliers.csv`), because the report applies the 80% rule only to daily aggregation. Completeness also
+  given "before QC removals". Wind speed adds a calm-excluded sensitivity row. `REPORT_COMPARISON_OUT`
+  env var redirects output for dry runs.
+- **Effect:** the three original CSVs are byte-identical to before. Restoring the Step 7 minutes raises
+  N by ≈ 1–2% for temperature/pressure and more for HTU21D humidity (TSMS00 696,858 → 1,124,946 vs. the
+  report's 1,059,354); temperature/pressure biases move by ≤ 0.02 at Ankara/Adana, humidity more
+  (TSMS00 −1.70 → −2.20 %RH, the report's −2.20). Findings in method-differences G25, WS5.
+
+## 2026-09-29: Wind roses share one scale per site and show N; reference rain traced to the TSMS export
+
+**Files:** `scripts/plotter/plot-gen-final.py` (`windrose`, new `_windrose_hourly`, `_windrose_site_scale`,
+`_nice_scale`); docs.
+
+**Wind roses.**
+- **Before:** each 3D-PAWS/reference pair shared a radial scale, but the three regimes (all, variable,
+  non-variable) and the three stations each had their own. The same ring meant different percentages
+  on different roses. The legend gave hours, not N.
+- **Change:** one scale per site, covering the largest sector of all 18 roses at the site (3 stations
+  × 2 instruments × 3 regimes). The rings step in 1, 2, 2.5, 5 or 10% increments, at most 6 rings.
+  Scales: Ankara and Konya 0–40%, Adana 0–50%. The legend shows `N = <hourly values drawn>` and the
+  calm hours left out.
+
+**Reference rain (SF-09, SF-31).**
+- The two TSMS data deliveries differ **only in rain**; every other variable is 100% identical where
+  they overlap (Oct 2022 – Dec 2024).
+- **Ankara:** the newer export is exactly ×10 the earlier one from Q1 2023. The earlier export
+  matches the 3D-PAWS gauges and the old Turkiye_Intercomparison analysis.
+- **Adana:** the newer export adds 941 summer 0.1 mm minutes (the SF-31 small-amount days).
+- **Konya:** agrees to 98.6%.
+- Not yet acted on: whether to use the earlier export's rain through Dec 2024 is a decision for the
+  user and TSMS (question 10).
+
 ## 2026-09-29: `plot-gen-final.py` restructured into named plot functions
 
 **Files:** `scripts/plotter/plot-gen-final.py`

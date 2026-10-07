@@ -1,0 +1,10 @@
+Site,Station,Months (ours),Bias mm/month (report),Bias mm/month (ours),R2 (report),R2 (ours),Ref total mm (ours),3D-PAWS total mm (ours),Caveat
+Ankara,TSMS00,36,-7.0,-268.732,0.68,0.71,10559.56,885.2,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS01,33,,-241.478,0.08,0.256,8357.18,388.4,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Ankara,TSMS02,34,,-260.891,0.22,0.213,9412.88,542.6,"NOT COMPARABLE: our Ankara reference rain is x10 too high from 2023-03-06 (SF-09, newer TSMS export); the report used correct data. Not corrected here (team decision)."
+Konya,TSMS03,36,,0.006,0.21,0.442,790.2,790.4,
+Konya,TSMS04,36,22.9,-0.156,0.01,0.262,803.8,798.2,
+Konya,TSMS05,36,,61.694,0.28,0.001,790.2,3011.2,
+Adana,TSMS06,36,,2.675,0.82,0.837,1298.7,1395.0,
+Adana,TSMS07,36,,-2.153,0.62,0.704,1323.1,1245.6,
+Adana,TSMS08,36,,-6.722,,0.388,1294.2,1052.2,
